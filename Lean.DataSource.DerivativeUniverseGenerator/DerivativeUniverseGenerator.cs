@@ -23,6 +23,7 @@ using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Interfaces;
 using QuantConnect.Lean.Engine.DataFeeds;
+using QuantConnect.Lean.Engine.DataFeeds.Enumerators;
 using QuantConnect.Lean.Engine.HistoricalData;
 using QuantConnect.Logging;
 using QuantConnect.Securities;
@@ -133,6 +134,9 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             }
         }
 
+        /// <summary>
+        /// Gets all the available symbols keyed by the canonical symbol from the available price data in the data folder.
+        /// </summary>
         private Dictionary<Symbol, IEnumerable<Symbol>> GetSymbols()
         {
             var result = new Dictionary<Symbol, IEnumerable<Symbol>>();
@@ -153,6 +157,9 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             return result;
         }
 
+        /// <summary>
+        /// Get s the zip file names for the canonical symbols where the contracts or universe constituents will be read from.
+        /// </summary>
         private IEnumerable<string> GetZipFileNames(DateTime date)
         {
             var tickTypeLower = _symbolsDataTickType.TickTypeToLower();
@@ -170,6 +177,9 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 });
         }
 
+        /// <summary>
+        /// Reads the symbols from the zip entry names for the given canonical symbol.
+        /// </summary>
         private IEnumerable<Symbol> GetSymbolsFromZipEntryNames(string zipFileName, Symbol canonicalSymbol)
         {
             var zipEntries = _dataCacheProvider.GetZipEntries(zipFileName);
@@ -187,12 +197,16 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             }
         }
 
-        private void GenerateUniverses(Dictionary<Symbol, IEnumerable<Symbol>> options)
+        /// <summary>
+        /// Generates the universes for each given canonical symbol and its constituents (options, future contracts, etc).
+        /// </summary>
+        /// <param name="symbols">The symbols keyed by their canonical</param>
+        private void GenerateUniverses(Dictionary<Symbol, IEnumerable<Symbol>> symbols)
         {
-            foreach (var kvp in options)
+            foreach (var kvp in symbols)
             {
                 var canonicalSymbol = kvp.Key;
-                var optionSymbols = kvp.Value;
+                var contractsSymbols = kvp.Value;
                 var underlyingSymbol = canonicalSymbol.Underlying;
 
                 string universeFileName = GetUniverseFileName(underlyingSymbol);
@@ -202,12 +216,16 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
                 var underlyingHistory = GenerateUnderlyingLine(underlyingSymbol, writer);
 
-                Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): Generating universe for {underlyingSymbol} with {optionSymbols.Count()} options");
+                Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): " +
+                    $"Generating universe for {underlyingSymbol} with {contractsSymbols.Count()} options");
 
-                GenerateDerivativeLines(canonicalSymbol, optionSymbols, underlyingHistory, writer);
+                GenerateDerivativeLines(canonicalSymbol, contractsSymbols, underlyingHistory, writer);
             }
         }
 
+        /// <summary>
+        /// Generates the file name where the derivative's universe entry will be saved.
+        /// </summary>
         private string GetUniverseFileName(Symbol underlyingSymbol)
         {
             var universeFileName = _optionsOutputFolderRoot;
@@ -228,6 +246,15 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             return universeFileName;
         }
 
+        /// <summary>
+        /// Generates the derivative's underlying universe entry and gets the historical data used for the entry generation.
+        /// </summary>
+        /// <returns>
+        /// The historical data used for the underlying universe entry generation.
+        /// </returns>
+        /// <remarks>
+        /// This method should be overridden to return an empty list (and skipping writing to the stream) if no underlying entry is needed.
+        /// </remarks>
         protected virtual List<Slice> GenerateUnderlyingLine(Symbol underlyingSymbol, StreamWriter writer)
         {
             var underlyingMarketHoursEntry = _marketHoursDatabase.GetEntry(underlyingSymbol.ID.Market, underlyingSymbol,
@@ -254,17 +281,24 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             var underlyingHistory = _historyProvider.GetHistory(new[] { underlyingHistoryRequest },
                 underlyingMarketHoursEntry.ExchangeHours.TimeZone).ToList();
 
+            var entry = CreateUniverseEntry(underlyingSymbol);
+
             if (underlyingHistory == null || underlyingHistory.Count == 0)
             {
-                writer.WriteLine(CreateDefaultUniverseEntry(underlyingSymbol).ToCsv());
+                writer.WriteLine(entry.ToCsv());
                 return new List<Slice>();
             }
 
-            writer.WriteLine(CreateUniverseEntry(underlyingSymbol, underlyingHistory[^1]).ToCsv());
+            entry.Update(underlyingHistory[^1]);
+            writer.WriteLine(entry.ToCsv());
 
             return underlyingHistory;
         }
 
+        /// <summary>
+        /// Generates and writes the derivative universe entries for the specified canonical symbol.
+        /// </summary>
+        /// <remarks>The underlying history is a List to avoid multiple enumerations of the history</remarks>
         protected virtual void GenerateDerivativeLines(Symbol canonicalSymbol, IEnumerable<Symbol> symbols, List<Slice> underlyingHistory,
             StreamWriter writer)
         {
@@ -272,26 +306,28 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             var historyEnd = _processingDate.AddDays(1);
             var historyStart = Time.GetStartTimeForTradeBars(marketHoursEntry.ExchangeHours, historyEnd, _historyResolution.ToTimeSpan(),
-                _historyBarCount, false, marketHoursEntry.DataTimeZone).Date;
+                _historyBarCount, false, marketHoursEntry.DataTimeZone);
 
             foreach (var symbol in symbols)
             {
-                var historyRequests = GetDerivativeHistoryRequests(symbol, historyStart, historyEnd, marketHoursEntry);
-
-                var history = _historyProvider.GetHistory(historyRequests, marketHoursEntry.ExchangeHours.TimeZone).ToList();
-
                 Log.Trace($"Generating option universe entry for {symbol.Value}");
 
+                var historyRequests = GetDerivativeHistoryRequests(symbol, historyStart, historyEnd, marketHoursEntry);
+                var history = _historyProvider.GetHistory(historyRequests, marketHoursEntry.ExchangeHours.TimeZone);
                 var entry = GenerateDerivativeEntry(symbol, history, underlyingHistory);
+
                 writer.WriteLine(entry.ToCsv());
             }
         }
 
+        /// <summary>
+        /// Creates the requests to get the data to be used to generate the universe entry for the given derivative symbol
+        /// </summary>
         protected virtual HistoryRequest[] GetDerivativeHistoryRequests(Symbol symbol, DateTime start, DateTime end,
             MarketHoursDatabase.Entry marketHoursEntry)
         {
             // TODO: This could be a virtual property
-            var dataTypes = new[] { typeof(TradeBar), typeof(QuoteBar), typeof(OpenInterest) };
+            var dataTypes = new[] { typeof(QuoteBar), typeof(OpenInterest) };
 
             return dataTypes.Select(dataType => new HistoryRequest(
                 start,
@@ -308,18 +344,25 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 LeanData.GetCommonTickTypeForCommonDataTypes(dataType, _securityType))).ToArray();
         }
 
-        protected virtual IDerivativeUniverseFileEntry GenerateDerivativeEntry(Symbol symbol, List<Slice> history, List<Slice> underlyingHistory)
+        /// <summary>
+        /// Generates the given symbol universe entry from the provided historical data
+        /// </summary>
+        protected virtual IDerivativeUniverseFileEntry GenerateDerivativeEntry(Symbol symbol, IEnumerable<Slice> history, List<Slice> underlyingHistory)
         {
-            if (history.Count == 0)
+            var entry = CreateUniverseEntry(symbol);
+            var enumerator = new SynchronizingSliceEnumerator(history.GetEnumerator(), underlyingHistory.GetEnumerator());
+
+            while (enumerator.MoveNext())
             {
-                return CreateDefaultUniverseEntry(symbol);
+                entry.Update(enumerator.Current);
             }
 
-            return CreateUniverseEntry(symbol, history[^1]);
+            return entry;
         }
 
-        protected abstract IDerivativeUniverseFileEntry CreateUniverseEntry(Symbol symbol, Slice slice);
-
-        protected abstract IDerivativeUniverseFileEntry CreateDefaultUniverseEntry(Symbol symbol);
+        /// <summary>
+        /// Factory method to create an instance of <see cref="IDerivativeUniverseFileEntry"/> for the given <paramref name="symbol"/>
+        /// </summary>
+        protected abstract IDerivativeUniverseFileEntry CreateUniverseEntry(Symbol symbol);
     }
 }

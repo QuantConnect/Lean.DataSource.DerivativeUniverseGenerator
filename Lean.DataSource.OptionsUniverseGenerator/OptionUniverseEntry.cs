@@ -1,0 +1,157 @@
+﻿/*
+ * QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
+ * Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+*/
+
+using Lean.DataSource.DerivativeUniverseGenerator;
+using QuantConnect.Data;
+using QuantConnect.Data.Market;
+using QuantConnect.Indicators;
+
+namespace QuantConnect.DataSource.OptionsUniverseGenerator
+{
+    /// <summary>
+    /// Representation of an option contract universe entry
+    /// </summary>
+    public class OptionUniverseEntry : BaseDerivativeUniverseFileEntry
+    {
+        private GreeksIndicators _greeksIndicators;
+
+        /// <summary>
+        /// Option contract's open interest on the processing date.
+        /// </summary>
+        public decimal? OpenInterest { get; set; }
+
+        /// <summary>
+        /// Option contract's implied volatility on the processing date.
+        /// </summary>
+        public decimal? ImpliedVolatility => _greeksIndicators?.ImpliedVolatility;
+
+        /// <summary>
+        /// Option contract's greeks on the processing date.
+        /// </summary>
+        public Greeks? Greeks => _greeksIndicators?.GetGreeks();
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="OptionUniverseEntry"/> class.
+        /// </summary>
+        /// <param name="symbol"></param>
+        public OptionUniverseEntry(Symbol symbol)
+           : base(symbol)
+        {
+            // Options universes contain a line for the underlying: we don't need greeks for it
+            if (symbol.SecurityType.IsOption())
+            {
+                var mirrorOptionSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
+                _greeksIndicators = new GreeksIndicators(symbol, mirrorOptionSymbol);
+            }
+        }
+
+        /// <summary>
+        /// Updates the option contract's prices, open interest, implied volatility and greeks with the provided data.
+        /// </summary>
+        public override void Update(Slice data)
+        {
+            base.Update(data);
+
+            if (Symbol.SecurityType.IsOption())
+            {
+                if (data.TryGet<OpenInterest>(Symbol, out var openInterest))
+                {
+                    OpenInterest = openInterest.Value;
+                }
+
+                _greeksIndicators.Update(data);
+            }
+        }
+
+        /// <summary>
+        /// Returns a CSV representation of the option contract's data.
+        /// </summary>
+        public override string ToCsv()
+        {
+            var csv = base.ToCsv();
+            return csv + $",{OpenInterest},{ImpliedVolatility},{Greeks?.Delta},{Greeks?.Gamma},{Greeks?.Vega},{Greeks?.Theta},{Greeks?.Rho}";
+        }
+
+        /// <summary>
+        /// Helper class that holds and updates the greeks indicators
+        /// </summary>
+        private class GreeksIndicators
+        {
+            private readonly Symbol _optionSymbol;
+            private readonly Symbol _mirrorOptionSymbol;
+
+            private readonly Delta _delta;
+            private readonly Gamma _gamma;
+            private readonly Vega _vega;
+            private readonly Theta _theta;
+            private readonly Rho _rho;
+
+            public GreeksIndicators(Symbol optionSymbol, Symbol mirrorOptionSymbol)
+            {
+                _optionSymbol = optionSymbol;
+                _mirrorOptionSymbol = mirrorOptionSymbol;
+
+                var riskFreeInterestRateModel = new InterestRateProvider();
+                var funcRiskFreeInterestRateModel = new FuncRiskFreeRateInterestRateModel(
+                    (datetime) => riskFreeInterestRateModel.GetInterestRate(datetime));
+
+                var dividendYieldModel = _optionSymbol.SecurityType == SecurityType.FutureOption || _optionSymbol.SecurityType == SecurityType.IndexOption
+                    ? new DividendYieldProvider()
+                    : new DividendYieldProvider(_optionSymbol.Underlying);
+
+                _delta = new Delta(_optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, _mirrorOptionSymbol);
+                _gamma = new Gamma(_optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, _mirrorOptionSymbol);
+                _vega = new Vega(_optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, _mirrorOptionSymbol);
+                _theta = new Theta(_optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, _mirrorOptionSymbol);
+                _rho = new Rho(_optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, _mirrorOptionSymbol);
+            }
+
+            public void Update(Slice slice)
+            {
+                if (slice.QuoteBars.TryGetValue(_optionSymbol, out var optionQuoteBar))
+                {
+                    Update(optionQuoteBar);
+                }
+
+                if (slice.QuoteBars.TryGetValue(_mirrorOptionSymbol, out var mirrorOptionQuoteBar))
+                {
+                    Update(mirrorOptionQuoteBar);
+                }
+
+                if (slice.TryGetValue(_optionSymbol.Underlying, out var underlyingData))
+                {
+                    Update(underlyingData);
+                }
+            }
+
+            private void Update(IBaseData data)
+            {
+                var point = new IndicatorDataPoint(data.Symbol, data.EndTime, data.Price);
+                _delta.Update(point);
+                _gamma.Update(point);
+                _vega.Update(point);
+                _theta.Update(point);
+                _rho.Update(point);
+            }
+
+            public Greeks GetGreeks()
+            {
+                return new Greeks(_delta, _gamma, _vega, _theta, _rho, 0m);
+            }
+
+            public decimal ImpliedVolatility => _delta.ImpliedVolatility;
+        }
+    }
+}
