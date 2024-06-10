@@ -50,8 +50,9 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         private readonly string _optionsDataSourceFolder;
         private readonly string _optionsOutputFolderRoot;
 
-        private readonly Resolution _resolution;
+        private readonly Resolution _optionsChainDataResolution;
         private readonly Resolution _historyResolution;
+        private readonly int _historyBarCount;
         private readonly TickType _tickType;
 
         private readonly IDataProvider _dataProvider;
@@ -76,14 +77,15 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             _dataFolderRoot = dataFolderRoot;
             _outputFolderRoot = outputFolderRoot;
 
-            _resolution = Resolution.Minute;
-            _historyResolution = Resolution.Daily;
+            _optionsChainDataResolution = Resolution.Minute;
+            _historyResolution = Resolution.Minute;
+            _historyBarCount = 200;
             _tickType = TickType.Quote;
 
             _optionsDataSourceFolder = Path.Combine(_dataFolderRoot,
                 _securityType.SecurityTypeToLower(),
                 _market,
-                _resolution.ResolutionToLower());
+                _optionsChainDataResolution.ResolutionToLower());
 
             _optionsOutputFolderRoot = Path.Combine(_outputFolderRoot,
                 _securityType.SecurityTypeToLower(),
@@ -123,11 +125,12 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         {
             Log.Trace($"DerivativeUniverseGenerator.Run(): Processing {_securityType}-{_market} universes for date {_processingDate:yyyy-MM-dd}");
 
-            var options = GetOptions();
 
             try
             {
+                var options = GetOptions();
                 GenerateUniverses(options);
+
                 return true;
             }
             catch (Exception ex)
@@ -179,7 +182,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             foreach (var zipEntry in zipEntries)
             {
-                var symbol = LeanData.ReadSymbolFromZipEntry(canonicalSymbol, _resolution, zipEntry);
+                var symbol = LeanData.ReadSymbolFromZipEntry(canonicalSymbol, _optionsChainDataResolution, zipEntry);
 
                 // do not return expired contracts
                 if (_processingDate.Date <= symbol.ID.Date.Date)
@@ -199,6 +202,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
                 string universeFileName = GetUniverseFileName(underlyingSymbol);
 
+                // TODO: Check whether LeanDataWriter can be used instead
                 using var writer = new StreamWriter(universeFileName);
 
                 var underlyingHistory = GenerateUnderlyingLine(underlyingSymbol, writer);
@@ -233,8 +237,14 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         {
             var underlyingMarketHoursEntry = _marketHoursDatabase.GetEntry(underlyingSymbol.ID.Market, underlyingSymbol,
                 underlyingSymbol.SecurityType);
-            var underlyingHistoryRequest = new HistoryRequest(Time.BeginningOfTime,
-                _processingDate.AddDays(1),
+
+            var historyEnd = _processingDate.AddDays(1);
+            var historyStart = Time.GetStartTimeForTradeBars(underlyingMarketHoursEntry.ExchangeHours, historyEnd, _historyResolution.ToTimeSpan(),
+                _historyBarCount, false, underlyingMarketHoursEntry.DataTimeZone);
+
+            var underlyingHistoryRequest = new HistoryRequest(
+                historyStart,
+                historyEnd,
                 typeof(TradeBar),
                 underlyingSymbol,
                 _historyResolution,
@@ -275,14 +285,15 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             var optionsMarketHoursEntry = _marketHoursDatabase.GetEntry(canonicalSymbol.ID.Market, canonicalSymbol, canonicalSymbol.SecurityType);
             var dataTypes = new[] { typeof(TradeBar), typeof(QuoteBar), typeof(OpenInterest) };
 
-            var startDate = Time.BeginningOfTime;
-            var endDate = _processingDate.AddDays(1);
+            var historyEnd = _processingDate.AddDays(1);
+            var historyStart = Time.GetStartTimeForTradeBars(optionsMarketHoursEntry.ExchangeHours, historyEnd, _historyResolution.ToTimeSpan(),
+                _historyBarCount, false, optionsMarketHoursEntry.DataTimeZone);
 
             foreach (var optionSymbol in optionSymbols)
             {
                 var historyRequests = dataTypes.Select(dataType => new HistoryRequest(
-                    startDate,
-                    endDate,
+                    historyStart,
+                    historyEnd,
                     dataType,
                     optionSymbol,
                     _historyResolution,
@@ -301,8 +312,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     optionSymbol.ID.StrikePrice,
                     optionSymbol.ID.Date);
                 historyRequests.Add(new HistoryRequest(
-                    startDate,
-                    endDate,
+                    historyStart,
+                    historyEnd,
                     typeof(QuoteBar),
                     mirrorOptionSymbol,
                     _historyResolution,
@@ -327,12 +338,12 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         {
             var greeksIndicators = new GreeksIndicators(optionSymbol, mirrorOptionSymbol);
 
-            var synchronizer = new SynchronizingSliceEnumerator(history.GetEnumerator(), underlyingHistory.GetEnumerator());
+            var enumerator = new SynchronizingSliceEnumerator(history.GetEnumerator(), underlyingHistory.GetEnumerator());
 
             Slice lastSlice = null;
-            while (synchronizer.MoveNext())
+            while (enumerator.MoveNext())
             {
-                var currentSlice = synchronizer.Current;
+                var currentSlice = enumerator.Current;
 
                 if (currentSlice.ContainsKey(optionSymbol))
                 {
