@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net6.0</TargetFramework>
+		<AssemblyName>lean-data-source-derivatives-universe-generator</AssemblyName>
+		<AssemblyTitle>Lean.DataSource.DerivativeUniverseGenerator</AssemblyTitle>
+		<AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+		<Product>Lean.DataSource.DerivativeUniverseGenerator</Product>
+		<Copyright>Copyright © 2024</Copyright>
+		<PlatformTarget>AnyCPU</PlatformTarget>
+		<OutputPath>bin\$(Configuration)\</OutputPath>
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+		<Deterministic>true</Deterministic>
+	</PropertyGroup>
+
+	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+		<DebugType>full</DebugType>
+		<DebugSymbols>true</DebugSymbols>
+		<DefineConstants>DEBUG;TRACE</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+		<DebugType>pdbonly</DebugType>
+		<DefineConstants>TRACE</DefineConstants>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="QuantConnect.Common" Version="2.5.*" />
+		<PackageReference Include="QuantConnect.Configuration" Version="2.5.*" />
+		<PackageReference Include="QuantConnect.Lean.Engine" Version="2.5.*" />
+	</ItemGroup>
+</Project>
