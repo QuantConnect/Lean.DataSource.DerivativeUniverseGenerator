@@ -5,6 +5,8 @@ VisualStudioVersion = 17.8.34525.116
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lean.DataSource.DerivativeUniverseGenerator", "Lean.DataSource.DerivativeUniverseGenerator\Lean.DataSource.DerivativeUniverseGenerator.csproj", "{AB0D2BA8-8AD1-43AA-814E-4EF31AB74502}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lean.DataSource.OptionsUniverseGenerator", "Lean.DataSource.OptionsUniverseGenerator\Lean.DataSource.OptionsUniverseGenerator.csproj", "{E6851F7A-200C-4A7F-BDB3-AA215EF7E390}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{AB0D2BA8-8AD1-43AA-814E-4EF31AB74502}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AB0D2BA8-8AD1-43AA-814E-4EF31AB74502}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AB0D2BA8-8AD1-43AA-814E-4EF31AB74502}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E6851F7A-200C-4A7F-BDB3-AA215EF7E390}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E6851F7A-200C-4A7F-BDB3-AA215EF7E390}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E6851F7A-200C-4A7F-BDB3-AA215EF7E390}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E6851F7A-200C-4A7F-BDB3-AA215EF7E390}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

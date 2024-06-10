@@ -17,14 +17,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-
+using Lean.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Configuration;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
-using QuantConnect.Indicators;
 using QuantConnect.Interfaces;
 using QuantConnect.Lean.Engine.DataFeeds;
-using QuantConnect.Lean.Engine.DataFeeds.Enumerators;
 using QuantConnect.Lean.Engine.HistoricalData;
 using QuantConnect.Logging;
 using QuantConnect.Securities;
@@ -35,30 +33,25 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
     /// <summary>
     /// Options Universe generator
     /// </summary>
-    public class DerivativeUniverseGenerator
+    public abstract class DerivativeUniverseGenerator
     {
-        private static readonly TradeBar _defaultTradeBar = new TradeBar(DateTime.MinValue, Symbol.None, 0, 0, 0, 0, 0);
-        private static readonly QuoteBar _defaultQuoteBar = new QuoteBar(DateTime.MinValue, Symbol.None, new Bar(0, 0, 0, 0), 0,
-            new Bar(0, 0, 0, 0), 0, Time.OneDay);
-        private static readonly OpenInterest _defaultOpenInterest = new OpenInterest(DateTime.MinValue, Symbol.None, 0);
+        protected readonly DateTime _processingDate;
+        protected readonly SecurityType _securityType;
+        protected readonly string _market;
+        protected readonly string _dataFolderRoot;
+        protected readonly string _outputFolderRoot;
+        protected readonly string _optionsDataSourceFolder;
+        protected readonly string _optionsOutputFolderRoot;
 
-        private readonly DateTime _processingDate;
-        private readonly SecurityType _securityType;
-        private readonly string _market;
-        private readonly string _dataFolderRoot;
-        private readonly string _outputFolderRoot;
-        private readonly string _optionsDataSourceFolder;
-        private readonly string _optionsOutputFolderRoot;
+        protected Resolution _symbolsDataResolution;
+        protected TickType _symbolsDataTickType;
+        protected Resolution _historyResolution;
+        protected int _historyBarCount;
 
-        private readonly Resolution _optionsChainDataResolution;
-        private readonly Resolution _historyResolution;
-        private readonly int _historyBarCount;
-        private readonly TickType _tickType;
-
-        private readonly IDataProvider _dataProvider;
-        private readonly ZipDataCacheProvider _dataCacheProvider;
-        private readonly SubscriptionDataReaderHistoryProvider _historyProvider;
-        private readonly MarketHoursDatabase _marketHoursDatabase;
+        protected readonly IDataProvider _dataProvider;
+        protected readonly ZipDataCacheProvider _dataCacheProvider;
+        protected readonly SubscriptionDataReaderHistoryProvider _historyProvider;
+        protected readonly MarketHoursDatabase _marketHoursDatabase;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DerivativeUniverseGenerator" /> class.
@@ -77,15 +70,15 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             _dataFolderRoot = dataFolderRoot;
             _outputFolderRoot = outputFolderRoot;
 
-            _optionsChainDataResolution = Resolution.Minute;
+            _symbolsDataResolution = Resolution.Minute;
+            _symbolsDataTickType = TickType.Quote;
             _historyResolution = Resolution.Minute;
             _historyBarCount = 200;
-            _tickType = TickType.Quote;
 
             _optionsDataSourceFolder = Path.Combine(_dataFolderRoot,
                 _securityType.SecurityTypeToLower(),
                 _market,
-                _optionsChainDataResolution.ResolutionToLower());
+                _symbolsDataResolution.ResolutionToLower());
 
             _optionsOutputFolderRoot = Path.Combine(_outputFolderRoot,
                 _securityType.SecurityTypeToLower(),
@@ -125,11 +118,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         {
             Log.Trace($"DerivativeUniverseGenerator.Run(): Processing {_securityType}-{_market} universes for date {_processingDate:yyyy-MM-dd}");
 
-
             try
             {
-                var options = GetOptions();
-                GenerateUniverses(options);
+                var symbols = GetSymbols();
+                GenerateUniverses(symbols);
 
                 return true;
             }
@@ -141,31 +133,33 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             }
         }
 
-        private Dictionary<Symbol, IEnumerable<Symbol>> GetOptions()
+        private Dictionary<Symbol, IEnumerable<Symbol>> GetSymbols()
         {
             var result = new Dictionary<Symbol, IEnumerable<Symbol>>();
 
-            var zipFileNames = GetOptionsZipFiles(_processingDate);
+            var zipFileNames = GetZipFileNames(_processingDate);
             foreach (var zipFileName in zipFileNames)
             {
                 LeanData.TryParsePath(zipFileName, out var canonicalSymbol, out var _, out var _, out var _, out var _);
                 if (!canonicalSymbol.IsCanonical())
                 {
-                    throw new Exception($"Invalid canonical symbol: {canonicalSymbol}");
+                    // Skip non-canonical symbols. Should not happen.
+                    continue;
                 }
 
-                result[canonicalSymbol] = GetOptionsSymbolsFromZipEntries(zipFileName, canonicalSymbol);
+                result[canonicalSymbol] = GetSymbolsFromZipEntryNames(zipFileName, canonicalSymbol);
             }
 
             return result;
         }
 
-        private IEnumerable<string> GetOptionsZipFiles(DateTime date)
+        private IEnumerable<string> GetZipFileNames(DateTime date)
         {
-            var tickTypeLower = _tickType.TickTypeToLower();
+            var tickTypeLower = _symbolsDataTickType.TickTypeToLower();
             var dateStr = date.ToString("yyyyMMdd");
 
             return Directory.EnumerateFiles(_optionsDataSourceFolder, "*.zip", SearchOption.AllDirectories)
+                // TODO: make this filter a virtual method or just get rid of it
                 .Where(fileName =>
                 {
                     var fileInfo = new FileInfo(fileName);
@@ -176,14 +170,15 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 });
         }
 
-        private IEnumerable<Symbol> GetOptionsSymbolsFromZipEntries(string zipFileName, Symbol canonicalSymbol)
+        private IEnumerable<Symbol> GetSymbolsFromZipEntryNames(string zipFileName, Symbol canonicalSymbol)
         {
             var zipEntries = _dataCacheProvider.GetZipEntries(zipFileName);
 
             foreach (var zipEntry in zipEntries)
             {
-                var symbol = LeanData.ReadSymbolFromZipEntry(canonicalSymbol, _optionsChainDataResolution, zipEntry);
+                var symbol = LeanData.ReadSymbolFromZipEntry(canonicalSymbol, _symbolsDataResolution, zipEntry);
 
+                // TODO: Should check for SecurityIdentifier.DefaultDate? Should we have a virtual IsContractExpired method?
                 // do not return expired contracts
                 if (_processingDate.Date <= symbol.ID.Date.Date)
                 {
@@ -209,7 +204,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
                 Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): Generating universe for {underlyingSymbol} with {optionSymbols.Count()} options");
 
-                GenerateOptionsLines(canonicalSymbol, optionSymbols, underlyingHistory, writer);
+                GenerateDerivativeLines(canonicalSymbol, optionSymbols, underlyingHistory, writer);
             }
         }
 
@@ -233,14 +228,14 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             return universeFileName;
         }
 
-        private List<Slice> GenerateUnderlyingLine(Symbol underlyingSymbol, StreamWriter writer)
+        protected virtual List<Slice> GenerateUnderlyingLine(Symbol underlyingSymbol, StreamWriter writer)
         {
             var underlyingMarketHoursEntry = _marketHoursDatabase.GetEntry(underlyingSymbol.ID.Market, underlyingSymbol,
                 underlyingSymbol.SecurityType);
 
             var historyEnd = _processingDate.AddDays(1);
             var historyStart = Time.GetStartTimeForTradeBars(underlyingMarketHoursEntry.ExchangeHours, historyEnd, _historyResolution.ToTimeSpan(),
-                _historyBarCount, false, underlyingMarketHoursEntry.DataTimeZone);
+                _historyBarCount, true, underlyingMarketHoursEntry.DataTimeZone);
 
             var underlyingHistoryRequest = new HistoryRequest(
                 historyStart,
@@ -261,225 +256,70 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             if (underlyingHistory == null || underlyingHistory.Count == 0)
             {
-                writer.WriteLine(new OptionUniverseEntry(underlyingSymbol, _defaultTradeBar).ToCsv());
+                writer.WriteLine(CreateDefaultUniverseEntry(underlyingSymbol).ToCsv());
                 return new List<Slice>();
             }
 
-            var lastSlice = underlyingHistory[^1];
-            if (!lastSlice.Bars.TryGetValue(underlyingSymbol, out var tradeBar))
-            {
-                tradeBar = null;
-            }
-            if (!lastSlice.QuoteBars.TryGetValue(underlyingSymbol, out var quoteBar))
-            {
-                quoteBar = null;
-            }
-
-            writer.WriteLine(new OptionUniverseEntry(underlyingSymbol, tradeBar, quoteBar).ToCsv());
+            writer.WriteLine(CreateUniverseEntry(underlyingSymbol, underlyingHistory[^1]).ToCsv());
 
             return underlyingHistory;
         }
 
-        private void GenerateOptionsLines(Symbol canonicalSymbol, IEnumerable<Symbol> optionSymbols, IEnumerable<Slice> underlyingHistory, StreamWriter writer)
+        protected virtual void GenerateDerivativeLines(Symbol canonicalSymbol, IEnumerable<Symbol> symbols, List<Slice> underlyingHistory,
+            StreamWriter writer)
         {
-            var optionsMarketHoursEntry = _marketHoursDatabase.GetEntry(canonicalSymbol.ID.Market, canonicalSymbol, canonicalSymbol.SecurityType);
-            var dataTypes = new[] { typeof(TradeBar), typeof(QuoteBar), typeof(OpenInterest) };
+            var marketHoursEntry = _marketHoursDatabase.GetEntry(canonicalSymbol.ID.Market, canonicalSymbol, canonicalSymbol.SecurityType);
 
             var historyEnd = _processingDate.AddDays(1);
-            var historyStart = Time.GetStartTimeForTradeBars(optionsMarketHoursEntry.ExchangeHours, historyEnd, _historyResolution.ToTimeSpan(),
-                _historyBarCount, false, optionsMarketHoursEntry.DataTimeZone);
+            var historyStart = Time.GetStartTimeForTradeBars(marketHoursEntry.ExchangeHours, historyEnd, _historyResolution.ToTimeSpan(),
+                _historyBarCount, false, marketHoursEntry.DataTimeZone).Date;
 
-            foreach (var optionSymbol in optionSymbols)
+            foreach (var symbol in symbols)
             {
-                var historyRequests = dataTypes.Select(dataType => new HistoryRequest(
-                    historyStart,
-                    historyEnd,
-                    dataType,
-                    optionSymbol,
-                    _historyResolution,
-                    optionsMarketHoursEntry.ExchangeHours,
-                    optionsMarketHoursEntry.DataTimeZone,
-                    _historyResolution,
-                    true,
-                    false,
-                    DataNormalizationMode.ScaledRaw,
-                    LeanData.GetCommonTickTypeForCommonDataTypes(dataType, _securityType))).ToList();
+                var historyRequests = GetDerivativeHistoryRequests(symbol, historyStart, historyEnd, marketHoursEntry);
 
-                var mirrorOptionSymbol = Symbol.CreateOption(optionSymbol.Underlying.Value,
-                    optionSymbol.ID.Market,
-                    optionSymbol.ID.OptionStyle,
-                    optionSymbol.ID.OptionRight == OptionRight.Call ? OptionRight.Put : OptionRight.Call,
-                    optionSymbol.ID.StrikePrice,
-                    optionSymbol.ID.Date);
-                historyRequests.Add(new HistoryRequest(
-                    historyStart,
-                    historyEnd,
-                    typeof(QuoteBar),
-                    mirrorOptionSymbol,
-                    _historyResolution,
-                    optionsMarketHoursEntry.ExchangeHours,
-                    optionsMarketHoursEntry.DataTimeZone,
-                    _historyResolution,
-                    true,
-                    false,
-                    DataNormalizationMode.ScaledRaw,
-                    TickType.Quote));
+                var history = _historyProvider.GetHistory(historyRequests, marketHoursEntry.ExchangeHours.TimeZone).ToList();
 
-                var history = _historyProvider.GetHistory(historyRequests, optionsMarketHoursEntry.ExchangeHours.TimeZone).ToList();
+                Log.Trace($"Generating option universe entry for {symbol.Value}");
 
-                Log.Trace($"Generating option universe entry for {optionSymbol.Value}");
-
-                var entry = GenerateOptionEntry(optionSymbol, mirrorOptionSymbol, history, underlyingHistory);
+                var entry = GenerateDerivativeEntry(symbol, history, underlyingHistory);
                 writer.WriteLine(entry.ToCsv());
             }
         }
 
-        private OptionUniverseEntry GenerateOptionEntry(Symbol optionSymbol, Symbol mirrorOptionSymbol, IEnumerable<Slice> history, IEnumerable<Slice> underlyingHistory)
+        protected virtual HistoryRequest[] GetDerivativeHistoryRequests(Symbol symbol, DateTime start, DateTime end,
+            MarketHoursDatabase.Entry marketHoursEntry)
         {
-            var greeksIndicators = new GreeksIndicators(optionSymbol, mirrorOptionSymbol);
+            // TODO: This could be a virtual property
+            var dataTypes = new[] { typeof(TradeBar), typeof(QuoteBar), typeof(OpenInterest) };
 
-            var enumerator = new SynchronizingSliceEnumerator(history.GetEnumerator(), underlyingHistory.GetEnumerator());
-
-            Slice lastSlice = null;
-            while (enumerator.MoveNext())
-            {
-                var currentSlice = enumerator.Current;
-
-                if (currentSlice.ContainsKey(optionSymbol))
-                {
-                    lastSlice = currentSlice;
-                }
-
-                if (currentSlice.QuoteBars.TryGetValue(optionSymbol, out var optionQuoteBar))
-                {
-                    greeksIndicators.Update(optionQuoteBar);
-                }
-
-                if (currentSlice.QuoteBars.TryGetValue(mirrorOptionSymbol, out var mirrorOptionQuoteBar))
-                {
-                    greeksIndicators.Update(mirrorOptionQuoteBar);
-                }
-
-                if (currentSlice.TryGetValue(optionSymbol.Underlying, out var underlyingData))
-                {
-                    greeksIndicators.Update(underlyingData);
-                }
-            }
-
-            // The contract history was empty
-            if (lastSlice == null)
-            {
-                return new OptionUniverseEntry(optionSymbol, _defaultTradeBar, _defaultQuoteBar, _defaultOpenInterest);
-            }
-
-            if (!lastSlice.Bars.TryGetValue(optionSymbol, out var tradeBar))
-            {
-                tradeBar = _defaultTradeBar;
-            }
-            if (!lastSlice.QuoteBars.TryGetValue(optionSymbol, out var quoteBar))
-            {
-                quoteBar = _defaultQuoteBar;
-            }
-            if (!lastSlice.Get<OpenInterest>().TryGetValue(optionSymbol, out var openInterest))
-            {
-                openInterest = _defaultOpenInterest;
-            }
-
-            var entry = new OptionUniverseEntry(optionSymbol, tradeBar, quoteBar, openInterest);
-            entry.ImpliedVolatility = greeksIndicators.ImpliedVolatility;
-            entry.Greeks = greeksIndicators.GetGreeks();
-
-            return entry;
+            return dataTypes.Select(dataType => new HistoryRequest(
+                start,
+                end,
+                dataType,
+                symbol,
+                _historyResolution,
+                marketHoursEntry.ExchangeHours,
+                marketHoursEntry.DataTimeZone,
+                _historyResolution,
+                true,
+                false,
+                DataNormalizationMode.ScaledRaw,
+                LeanData.GetCommonTickTypeForCommonDataTypes(dataType, _securityType))).ToArray();
         }
 
-        /// <summary>
-        /// Helper class for the <see cref="DerivativeUniverseGenerator" /> generator.
-        /// </summary>
-        private class OptionUniverseEntry
+        protected virtual IDerivativeUniverseFileEntry GenerateDerivativeEntry(Symbol symbol, List<Slice> history, List<Slice> underlyingHistory)
         {
-            public Symbol Symbol { get; set; }
-            public decimal Open { get; set; }
-            public decimal High { get; set; }
-            public decimal Low { get; set; }
-            public decimal Close { get; set; }
-            public decimal Volume { get; set; }
-            public decimal? OpenInterest { get; set; }
-            public decimal? ImpliedVolatility { get; set; }
-            public Greeks? Greeks { get; set; }
-
-            public OptionUniverseEntry(Symbol symbol, TradeBar? tradeBar = null, QuoteBar? quoteBar = null, OpenInterest? openInterest = null)
+            if (history.Count == 0)
             {
-                if (tradeBar == null && quoteBar == null)
-                {
-                    throw new ArgumentException("Both tradeBar and quoteBar are null.");
-                }
-
-                Symbol = symbol;
-                Open = tradeBar?.Open != decimal.Zero ? tradeBar.Open : (quoteBar?.Open ?? decimal.Zero);
-                High = tradeBar?.High != decimal.Zero ? tradeBar.High : (quoteBar?.High ?? decimal.Zero);
-                Low = tradeBar?.Low != decimal.Zero ? tradeBar.Low : (quoteBar?.Low ?? decimal.Zero);
-                Close = tradeBar?.Close != decimal.Zero ? tradeBar.Close : (quoteBar?.Close ?? decimal.Zero);
-                Volume = tradeBar?.Volume ?? decimal.Zero;
-                OpenInterest = openInterest?.Value;
+                return CreateDefaultUniverseEntry(symbol);
             }
 
-            public string ToCsv()
-            {
-                var sid = Symbol.ID.ToString();
-                if (Symbol.SecurityType.IsOption())
-                {
-                    sid = sid.Replace($"|{Symbol.Underlying.ID}", "");
-                }
-
-                return $"{sid},{Symbol.Value},{Open},{High},{Low},{Close},{Volume},{OpenInterest},{ImpliedVolatility}," +
-                    $"{Greeks?.Delta},{Greeks?.Gamma},{Greeks?.Vega},{Greeks?.Theta},{Greeks?.Rho}";
-            }
+            return CreateUniverseEntry(symbol, history[^1]);
         }
 
-        /// <summary>
-        /// Helper class that holds and updates the greeks indicators
-        /// </summary>
-        private class GreeksIndicators
-        {
-            private readonly Delta _delta;
-            private readonly Gamma _gamma;
-            private readonly Vega _vega;
-            private readonly Theta _theta;
-            private readonly Rho _rho;
+        protected abstract IDerivativeUniverseFileEntry CreateUniverseEntry(Symbol symbol, Slice slice);
 
-            public GreeksIndicators(Symbol optionSymbol, Symbol mirrorOptionSymbol)
-            {
-                var riskFreeInterestRateModel = new InterestRateProvider();
-                var funcRiskFreeInterestRateModel = new FuncRiskFreeRateInterestRateModel(
-                    (datetime) => riskFreeInterestRateModel.GetInterestRate(datetime));
-
-                var dividendYieldModel = optionSymbol.SecurityType == SecurityType.FutureOption || optionSymbol.SecurityType == SecurityType.IndexOption
-                    ? new DividendYieldProvider()
-                    : new DividendYieldProvider(optionSymbol.Underlying);
-
-                _delta = new Delta(optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, mirrorOptionSymbol);
-                _gamma = new Gamma(optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, mirrorOptionSymbol);
-                _vega = new Vega(optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, mirrorOptionSymbol);
-                _theta = new Theta(optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, mirrorOptionSymbol);
-                _rho = new Rho(optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, mirrorOptionSymbol);
-            }
-
-            public void Update(IBaseData data)
-            {
-                var point = new IndicatorDataPoint(data.Symbol, data.EndTime, data.Price);
-                _delta.Update(point);
-                _gamma.Update(point);
-                _vega.Update(point);
-                _theta.Update(point);
-                _rho.Update(point);
-            }
-
-            public Greeks GetGreeks()
-            {
-                return new Greeks(_delta, _gamma, _vega, _theta, _rho, 0m);
-            }
-
-            public decimal ImpliedVolatility => _delta.ImpliedVolatility;
-        }
+        protected abstract IDerivativeUniverseFileEntry CreateDefaultUniverseEntry(Symbol symbol);
     }
 }

@@ -24,7 +24,7 @@ using QuantConnect.Logging;
 namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 {
     /// <summary>
-    /// Entry point for derivatives universe generator.
+    /// Entry point abstract class with common functionalities for derivatives universe generator programs.
     /// </summary>
     /// <param name="args">
     /// All CLI argument are optional, if defined they will override the ones defined in config.json
@@ -32,14 +32,22 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
     ///     "--security-type="          : Option security type to process.
     ///     "--market="                 : Market of data to process.
     /// </param>
-    internal class Program
+    /// <remarks>
+    /// To use the base implementation, just instantiate your program class and call
+    /// the <see cref="MainImpl(string[])"/> method in the static Main method.
+    ///
+    /// To override the initialization, implement the <see cref="Initialize(string[], out SecurityType, out string, out string, out string)"/> method.
+    /// To add new command line arguments, another Initialize method could be added, calling the base method and adding the new arguments.
+    /// </remarks>
+    public abstract class Program
     {
-        private static string DataFleetDeploymentDateEnvVariable = "QC_DATAFLEET_DEPLOYMENT_DATE";
+        protected static string DataFleetDeploymentDateEnvVariable = "QC_DATAFLEET_DEPLOYMENT_DATE";
 
-        static void Main(string[] args)
+        protected virtual void MainImpl(string[] args)
         {
             Initialize(args, out var securityType, out var market, out var dataFolderRoot, out var outputFolderRoot);
 
+            // TODO: Remove
             dataFolderRoot = "./InputData";
             outputFolderRoot = "./OutputData";
 
@@ -76,7 +84,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             //processingDate = new DateTime(2020, 01, 01);
             //market = "cme";
 
-            var optionsUniverseGenerator = new DerivativeUniverseGenerator(processingDate, securityType, market, dataFolderRoot, outputFolderRoot);
+            var optionsUniverseGenerator = GetUniverseGenerator(securityType, market, dataFolderRoot, outputFolderRoot, processingDate);
 
             var timer = new Stopwatch();
             timer.Start();
@@ -100,10 +108,13 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             Environment.Exit(0);
         }
 
+        protected abstract DerivativeUniverseGenerator GetUniverseGenerator(SecurityType securityType, string market, string dataFolderRoot,
+            string outputFolderRoot, DateTime processingDate);
+
         /// <summary>
         /// Validate and extract command line args and configuration options.
         /// </summary>
-        private static void Initialize(string[] args, out SecurityType securityType, out string market, out string dataFolderRoot,
+        protected virtual void Initialize(string[] args, out SecurityType securityType, out string market, out string dataFolderRoot,
             out string outputFolderRoot)
         {
             var argsData = args.Select(x => x.Split('=')).ToDictionary(x => x[0], x => x.Length > 1 ? x[1] : null);
