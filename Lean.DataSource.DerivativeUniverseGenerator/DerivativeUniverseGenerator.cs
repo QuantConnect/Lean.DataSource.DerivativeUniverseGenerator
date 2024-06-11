@@ -211,7 +211,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
                 string universeFileName = GetUniverseFileName(underlyingSymbol);
 
-                // TODO: Check whether LeanDataWriter can be used instead
                 using var writer = new StreamWriter(universeFileName);
 
                 var underlyingHistory = GenerateUnderlyingLine(underlyingSymbol, writer);

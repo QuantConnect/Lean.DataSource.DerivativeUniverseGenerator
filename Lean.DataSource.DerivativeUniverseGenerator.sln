@@ -3,9 +3,17 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.8.34525.116
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lean.DataSource.DerivativeUniverseGenerator", "Lean.DataSource.DerivativeUniverseGenerator\Lean.DataSource.DerivativeUniverseGenerator.csproj", "{AB0D2BA8-8AD1-43AA-814E-4EF31AB74502}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lean.DataSource.DerivativeUniverseGenerator", "Lean.DataSource.DerivativeUniverseGenerator\Lean.DataSource.DerivativeUniverseGenerator.csproj", "{AB0D2BA8-8AD1-43AA-814E-4EF31AB74502}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lean.DataSource.OptionsUniverseGenerator", "Lean.DataSource.OptionsUniverseGenerator\Lean.DataSource.OptionsUniverseGenerator.csproj", "{E6851F7A-200C-4A7F-BDB3-AA215EF7E390}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lean.DataSource.OptionsUniverseGenerator", "Lean.DataSource.OptionsUniverseGenerator\Lean.DataSource.OptionsUniverseGenerator.csproj", "{E6851F7A-200C-4A7F-BDB3-AA215EF7E390}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuantConnect", "..\Lean\Common\QuantConnect.csproj", "{6D7C9C9B-F2FB-42D6-BCE7-E088A4814502}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuantConnect.Configuration", "..\Lean\Configuration\QuantConnect.Configuration.csproj", "{BC6F7443-57DC-4578-860D-67BB071E33D3}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuantConnect.Lean.Engine", "..\Lean\Engine\QuantConnect.Lean.Engine.csproj", "{A7D7A84F-46E7-48DB-8587-802CE9722EFD}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuantConnect.Indicators", "..\Lean\Indicators\QuantConnect.Indicators.csproj", "{BD736578-ED02-45E3-843C-4902C18E235E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +29,22 @@ Global
 		{E6851F7A-200C-4A7F-BDB3-AA215EF7E390}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E6851F7A-200C-4A7F-BDB3-AA215EF7E390}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E6851F7A-200C-4A7F-BDB3-AA215EF7E390}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6D7C9C9B-F2FB-42D6-BCE7-E088A4814502}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6D7C9C9B-F2FB-42D6-BCE7-E088A4814502}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6D7C9C9B-F2FB-42D6-BCE7-E088A4814502}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6D7C9C9B-F2FB-42D6-BCE7-E088A4814502}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BC6F7443-57DC-4578-860D-67BB071E33D3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BC6F7443-57DC-4578-860D-67BB071E33D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BC6F7443-57DC-4578-860D-67BB071E33D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BC6F7443-57DC-4578-860D-67BB071E33D3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7D7A84F-46E7-48DB-8587-802CE9722EFD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7D7A84F-46E7-48DB-8587-802CE9722EFD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7D7A84F-46E7-48DB-8587-802CE9722EFD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7D7A84F-46E7-48DB-8587-802CE9722EFD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BD736578-ED02-45E3-843C-4902C18E235E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BD736578-ED02-45E3-843C-4902C18E235E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BD736578-ED02-45E3-843C-4902C18E235E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BD736578-ED02-45E3-843C-4902C18E235E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -29,31 +29,6 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
         Symbol Symbol { get; set; }
 
         /// <summary>
-        /// Open price on the processing date.
-        /// </summary>
-        decimal Open { get; set; }
-
-        /// <summary>
-        /// High price on the processing date.
-        /// </summary>
-        decimal High { get; set; }
-
-        /// <summary>
-        /// Low price on the processing date.
-        /// </summary>
-        decimal Low { get; set; }
-
-        /// <summary>
-        /// Close price on the processing date.
-        /// </summary>
-        decimal Close { get; set; }
-
-        /// <summary>
-        /// Volume on the processing date.
-        /// </summary>
-        decimal Volume { get; set; }
-
-        /// <summary>
         /// Update the entry with the data from the slice.
         /// </summary>
         void Update(Slice data);

@@ -16,6 +16,7 @@
 using Lean.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
+using QuantConnect.Data.UniverseSelection;
 using QuantConnect.Indicators;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
@@ -80,8 +81,11 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         public override string ToCsv()
         {
-            var csv = base.ToCsv();
-            return csv + $",{OpenInterest},{ImpliedVolatility},{Greeks?.Delta},{Greeks?.Gamma},{Greeks?.Vega},{Greeks?.Theta},{Greeks?.Rho}";
+            // Use Lean's OptionsUniverse class to generate the CSV to avoid writing/reading mistakes
+            var optionUniverse = new OptionsUniverse(Time.BeginningOfTime, Symbol, Open, High, Low, Close, Volume,
+                OpenInterest, ImpliedVolatility, Greeks);
+
+            return optionUniverse.ToCsv();
         }
 
         /// <summary>
@@ -107,9 +111,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 var funcRiskFreeInterestRateModel = new FuncRiskFreeRateInterestRateModel(
                     (datetime) => riskFreeInterestRateModel.GetInterestRate(datetime));
 
-                var dividendYieldModel = _optionSymbol.SecurityType == SecurityType.FutureOption || _optionSymbol.SecurityType == SecurityType.IndexOption
-                    ? new DividendYieldProvider()
-                    : new DividendYieldProvider(_optionSymbol.Underlying);
+                var dividendYieldModel = DividendYieldProvider.CreateForOption(_optionSymbol);
 
                 _delta = new Delta(_optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, _mirrorOptionSymbol);
                 _gamma = new Gamma(_optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, _mirrorOptionSymbol);
