@@ -14,6 +14,7 @@
 */
 
 using System;
+using System.IO;
 using System.Linq;
 using Lean.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Data;
@@ -45,6 +46,28 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         protected override IDerivativeUniverseFileEntry CreateUniverseEntry(Symbol symbol)
         {
             return new OptionUniverseEntry(symbol);
+        }
+
+        /// <summary>
+        /// Generates the file name where the derivative's universe entry will be saved.
+        /// </summary>
+        protected override string GetUniverseFileName(Symbol canonicalSymbol)
+        {
+            var universeDirectory = _securityType switch
+            {
+                SecurityType.Option => Path.Combine(_universesOutputFolderRoot, canonicalSymbol.Underlying.Value.ToLowerInvariant()),
+                SecurityType.IndexOption => Path.Combine(_universesOutputFolderRoot, canonicalSymbol.ID.Symbol.ToLowerInvariant()),
+                SecurityType.FutureOption => Path.Combine(_universesOutputFolderRoot,
+                    canonicalSymbol.ID.Symbol.ToLowerInvariant(),
+                    $"{canonicalSymbol.ID.Date:yyyyMMdd}"),
+                _ => throw new ArgumentOutOfRangeException(nameof(canonicalSymbol), $"Unsupported security type: {_securityType}")
+            };
+
+            Directory.CreateDirectory(universeDirectory);
+
+            var previousTradingDate = _marketHoursDatabase.GetExchangeHours(canonicalSymbol.ID.Market, canonicalSymbol, canonicalSymbol.SecurityType)
+                .GetPreviousTradingDay(_processingDate);
+            return Path.Combine(universeDirectory, $"{previousTradingDate:yyyyMMdd}.csv");
         }
 
         /// <summary>

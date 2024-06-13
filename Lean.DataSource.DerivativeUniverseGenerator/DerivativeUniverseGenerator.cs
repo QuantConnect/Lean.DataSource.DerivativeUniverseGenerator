@@ -20,6 +20,7 @@ using System.Linq;
 using Lean.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Configuration;
 using QuantConnect.Data;
+using QuantConnect.Data.Auxiliary;
 using QuantConnect.Data.Market;
 using QuantConnect.Interfaces;
 using QuantConnect.Lean.Engine.DataFeeds;
@@ -32,19 +33,21 @@ using QuantConnect.Util;
 namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 {
     /// <summary>
-    /// Options Universe generator
+    /// Derivatives Universe Generator
     /// </summary>
     public abstract class DerivativeUniverseGenerator
     {
+        // TODO: This could be removed since it's only for Lean repo data generation locally, but it won't hurt to keep it
+        protected static readonly Resolution[] Resolutions = new[] { Resolution.Minute, Resolution.Hour, Resolution.Daily };
+
         protected readonly DateTime _processingDate;
         protected readonly SecurityType _securityType;
         protected readonly string _market;
         protected readonly string _dataFolderRoot;
         protected readonly string _outputFolderRoot;
-        protected readonly string _optionsDataSourceFolder;
-        protected readonly string _optionsOutputFolderRoot;
+        protected readonly string _dataSourceFolder;
+        protected readonly string _universesOutputFolderRoot;
 
-        protected Resolution _symbolsDataResolution;
         protected TickType _symbolsDataTickType;
         protected Resolution _historyResolution;
         protected int _historyBarCount;
@@ -58,7 +61,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// Initializes a new instance of the <see cref="DerivativeUniverseGenerator" /> class.
         /// </summary>
         /// <param name="processingDate">The processing date</param>
-        /// <param name="securityType">Option security type to process</param>
+        /// <param name="securityType">Derivative security type to process</param>
         /// <param name="market">Market of data to process</param>
         /// <param name="dataFolderRoot">Path to the data folder</param>
         /// <param name="outputFolderRoot">Path to the output folder</param>
@@ -71,43 +74,39 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             _dataFolderRoot = dataFolderRoot;
             _outputFolderRoot = outputFolderRoot;
 
-            _symbolsDataResolution = Resolution.Minute;
             _symbolsDataTickType = TickType.Quote;
             _historyResolution = Resolution.Minute;
             _historyBarCount = 200;
 
-            _optionsDataSourceFolder = Path.Combine(_dataFolderRoot,
+            _dataSourceFolder = Path.Combine(_dataFolderRoot,
                 _securityType.SecurityTypeToLower(),
-                _market,
-                _symbolsDataResolution.ResolutionToLower());
+                _market);
 
-            _optionsOutputFolderRoot = Path.Combine(_outputFolderRoot,
+            _universesOutputFolderRoot = Path.Combine(_outputFolderRoot,
                 _securityType.SecurityTypeToLower(),
                 _market,
                 "universes");
 
             //_dataProvider = new ProcessedDataProvider();
-            var api = Composer.Instance.GetExportedValueByTypeName<IApi>(Config.Get("api-handler", "Api"));
-            api.Initialize(Globals.UserId, Globals.UserToken, dataFolderRoot);
-            _dataProvider = Composer.Instance.GetExportedValueByTypeName<IDataProvider>(
-                Config.Get("data-provider", "ApiDataProvider"), forceTypeNameOnExisting: false);
-            Composer.Instance.AddPart<IDataProvider>(_dataProvider);
+            // TODO: Remove. This is only for Lean repo data generation locally
+            _dataProvider = new DefaultDataProvider();
 
             _dataCacheProvider = new ZipDataCacheProvider(_dataProvider);
 
-            var mapFileProvider = Composer.Instance.GetExportedValueByTypeName<IMapFileProvider>(
-                Config.Get("map-file-provider", "LocalZipMapFileProvider"), forceTypeNameOnExisting: false);
+            //var mapFileProvider = new LocalDiskMapFileProvider();
+            var mapFileProvider = new LocalZipMapFileProvider();
             mapFileProvider.Initialize(_dataProvider);
+            Composer.Instance.AddPart<IMapFileProvider>(mapFileProvider);
 
-            var factorFileProvider = Composer.Instance.GetExportedValueByTypeName<IFactorFileProvider>(
-                Config.Get("factor-file-provider", "LocalZipFactorFileProvider"), forceTypeNameOnExisting: false);
+            //var factorFileProvider = new LocalDiskFactorFileProvider();
+            var factorFileProvider = new LocalZipFactorFileProvider();
             factorFileProvider.Initialize(mapFileProvider, _dataProvider);
-
-            var dataPermissionManager = new DataPermissionManager();
+            Composer.Instance.AddPart<IFactorFileProvider>(factorFileProvider);
 
             _historyProvider = new SubscriptionDataReaderHistoryProvider();
-            _historyProvider.Initialize(new HistoryProviderInitializeParameters(null, null, _dataProvider, _dataCacheProvider, mapFileProvider,
-                factorFileProvider, (_) => { }, true, dataPermissionManager, null, new AlgorithmSettings()));
+            var parameters = new HistoryProviderInitializeParameters(null, null, _dataProvider, _dataCacheProvider, mapFileProvider,
+                factorFileProvider, (_) => { }, true, new DataPermissionManager(), null, new AlgorithmSettings());
+            _historyProvider.Initialize(parameters);
 
             _marketHoursDatabase = MarketHoursDatabase.FromDataFolder();
         }
@@ -141,7 +140,11 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         {
             var result = new Dictionary<Symbol, IEnumerable<Symbol>>();
 
-            var zipFileNames = GetZipFileNames(_processingDate);
+            // TODO: This could be removed since it's only for Lean repo data generation locally, but won't hurt to keep it
+            foreach (var resolution in Resolutions)
+            {
+                var zipFileNames = GetZipFileNames(_processingDate, resolution);
+
             foreach (var zipFileName in zipFileNames)
             {
                 LeanData.TryParsePath(zipFileName, out var canonicalSymbol, out var _, out var _, out var _, out var _);
@@ -151,51 +154,71 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     continue;
                 }
 
-                result[canonicalSymbol] = GetSymbolsFromZipEntryNames(zipFileName, canonicalSymbol);
+                    // Skip if we already have the symbols for this canonical symbol using a higher resolution
+                    if (result.ContainsKey(canonicalSymbol))
+                    {
+                        continue;
+            }
+
+                    var symbols = GetSymbolsFromZipEntryNames(zipFileName, canonicalSymbol, resolution);
+                    if (symbols != null)
+                    {
+                        result[canonicalSymbol] = symbols;
+                    }
+                }
             }
 
             return result;
         }
 
         /// <summary>
-        /// Get s the zip file names for the canonical symbols where the contracts or universe constituents will be read from.
+        /// Gets the zip file names for the canonical symbols where the contracts or universe constituents will be read from.
         /// </summary>
-        private IEnumerable<string> GetZipFileNames(DateTime date)
+        private IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
         {
             var tickTypeLower = _symbolsDataTickType.TickTypeToLower();
-            var dateStr = date.ToString("yyyyMMdd");
+            var dateStr = date.ToString(resolution == Resolution.Minute ? "yyyyMMdd" : "yyyy");
 
-            return Directory.EnumerateFiles(_optionsDataSourceFolder, "*.zip", SearchOption.AllDirectories)
-                // TODO: make this filter a virtual method or just get rid of it
+            return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), "*.zip", SearchOption.AllDirectories)
                 .Where(fileName =>
                 {
                     var fileInfo = new FileInfo(fileName);
                     var fileNameParts = fileInfo.Name.Split('_');
+
+                    if (resolution == Resolution.Minute)
+                    {
                     return fileNameParts.Length == 3 &&
                            fileNameParts[0] == dateStr &&
                            fileNameParts[1] == tickTypeLower;
+                    }
+
+                    return fileNameParts.Length == 4 &&
+                               fileNameParts[1] == dateStr &&
+                               fileNameParts[2] == tickTypeLower;
                 });
         }
 
         /// <summary>
         /// Reads the symbols from the zip entry names for the given canonical symbol.
         /// </summary>
-        private IEnumerable<Symbol> GetSymbolsFromZipEntryNames(string zipFileName, Symbol canonicalSymbol)
+        private IEnumerable<Symbol> GetSymbolsFromZipEntryNames(string zipFileName, Symbol canonicalSymbol, Resolution resolution)
         {
-            var zipEntries = _dataCacheProvider.GetZipEntries(zipFileName);
+            List<string> zipEntries;
 
-            foreach (var zipEntry in zipEntries)
+            try
             {
-                var symbol = LeanData.ReadSymbolFromZipEntry(canonicalSymbol, _symbolsDataResolution, zipEntry);
-
-                // TODO: Should check for SecurityIdentifier.DefaultDate? Should we have a virtual IsContractExpired method?
-                // do not return expired contracts
-                if (_processingDate.Date <= symbol.ID.Date.Date)
-                {
-                    yield return symbol;
-                }
+                zipEntries = _dataCacheProvider.GetZipEntries(zipFileName);
             }
-        }
+            catch
+            {
+                return null;
+            }
+
+            return zipEntries
+                .Select(zipEntry => LeanData.ReadSymbolFromZipEntry(canonicalSymbol, resolution, zipEntry))
+                // do not return expired contracts
+                .Where(symbol => _processingDate.Date <= symbol.ID.Date.Date);
+                }
 
         /// <summary>
         /// Generates the universes for each given canonical symbol and its constituents (options, future contracts, etc).
@@ -206,44 +229,36 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             foreach (var kvp in symbols)
             {
                 var canonicalSymbol = kvp.Key;
-                var contractsSymbols = kvp.Value;
+                var contractsSymbols = kvp.Value.ToList();
                 var underlyingSymbol = canonicalSymbol.Underlying;
 
-                string universeFileName = GetUniverseFileName(underlyingSymbol);
+                var universeFileName = GetUniverseFileName(canonicalSymbol);
+
+                var underlyingMarketHoursEntry = _marketHoursDatabase.GetEntry(underlyingSymbol.ID.Market, underlyingSymbol,
+                    underlyingSymbol.SecurityType);
+                var optionMarketHoursEntry = _marketHoursDatabase.GetEntry(canonicalSymbol.ID.Market, canonicalSymbol, canonicalSymbol.SecurityType);
+
+                if (!underlyingMarketHoursEntry.ExchangeHours.IsDateOpen(_processingDate) ||
+                    !optionMarketHoursEntry.ExchangeHours.IsDateOpen(_processingDate))
+                {
+                    Log.Trace($"Market is closed on {_processingDate:yyyy/MM/dd} for {underlyingSymbol}, universe file will not be generated.");
+                    return;
+                }
+
+                Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): " +
+                    $"Generating universe for {underlyingSymbol} on {_processingDate:yyyy/MM/dd} with {contractsSymbols.Count} constituents.");
 
                 using var writer = new StreamWriter(universeFileName);
 
-                var underlyingHistory = GenerateUnderlyingLine(underlyingSymbol, writer);
-
-                Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): " +
-                    $"Generating universe for {underlyingSymbol} with {contractsSymbols.Count()} options");
-
-                GenerateDerivativeLines(canonicalSymbol, contractsSymbols, underlyingHistory, writer);
+                GenerateUnderlyingLine(underlyingSymbol, underlyingMarketHoursEntry, writer, out var underlyingHistory);
+                GenerateDerivativeLines(canonicalSymbol, contractsSymbols, optionMarketHoursEntry, underlyingHistory, writer);
             }
         }
 
         /// <summary>
         /// Generates the file name where the derivative's universe entry will be saved.
         /// </summary>
-        private string GetUniverseFileName(Symbol underlyingSymbol)
-        {
-            var universeFileName = _optionsOutputFolderRoot;
-            if (_securityType == SecurityType.FutureOption)
-            {
-                universeFileName = Path.Combine(universeFileName,
-                    underlyingSymbol.ID.Symbol.ToLowerInvariant(),
-                    $"{underlyingSymbol.ID.Date:yyyyMMdd}");
-            }
-            else
-            {
-                universeFileName = Path.Combine(universeFileName, underlyingSymbol.Value.ToLowerInvariant());
-            }
-
-            Directory.CreateDirectory(universeFileName);
-            universeFileName = Path.Combine(universeFileName, $"{_processingDate.AddDays(-1):yyyyMMdd}.csv");
-
-            return universeFileName;
-        }
+        protected abstract string GetUniverseFileName(Symbol canonicalSymbol);
 
         /// <summary>
         /// Generates the derivative's underlying universe entry and gets the historical data used for the entry generation.
@@ -254,14 +269,12 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// <remarks>
         /// This method should be overridden to return an empty list (and skipping writing to the stream) if no underlying entry is needed.
         /// </remarks>
-        protected virtual List<Slice> GenerateUnderlyingLine(Symbol underlyingSymbol, StreamWriter writer)
+        protected virtual void GenerateUnderlyingLine(Symbol underlyingSymbol, MarketHoursDatabase.Entry marketHoursEntry,
+            StreamWriter writer, out List<Slice> history)
         {
-            var underlyingMarketHoursEntry = _marketHoursDatabase.GetEntry(underlyingSymbol.ID.Market, underlyingSymbol,
-                underlyingSymbol.SecurityType);
-
-            var historyEnd = _processingDate.AddDays(1);
-            var historyStart = Time.GetStartTimeForTradeBars(underlyingMarketHoursEntry.ExchangeHours, historyEnd, _historyResolution.ToTimeSpan(),
-                _historyBarCount, true, underlyingMarketHoursEntry.DataTimeZone);
+            var historyEnd = _processingDate; // To use the close price of the previous day
+            var historyStart = Time.GetStartTimeForTradeBars(marketHoursEntry.ExchangeHours, historyEnd, _historyResolution.ToTimeSpan(),
+                _historyBarCount, true, marketHoursEntry.DataTimeZone);
 
             var underlyingHistoryRequest = new HistoryRequest(
                 historyStart,
@@ -269,47 +282,50 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 typeof(TradeBar),
                 underlyingSymbol,
                 _historyResolution,
-                underlyingMarketHoursEntry.ExchangeHours,
-                underlyingMarketHoursEntry.DataTimeZone,
+                marketHoursEntry.ExchangeHours,
+                marketHoursEntry.DataTimeZone,
                 _historyResolution,
                 true,
                 false,
                 DataNormalizationMode.ScaledRaw,
                 LeanData.GetCommonTickTypeForCommonDataTypes(typeof(TradeBar), _securityType));
 
-            var underlyingHistory = _historyProvider.GetHistory(new[] { underlyingHistoryRequest },
-                underlyingMarketHoursEntry.ExchangeHours.TimeZone).ToList();
+            history = _historyProvider.GetHistory(new[] { underlyingHistoryRequest },
+                marketHoursEntry.ExchangeHours.TimeZone).ToList();
 
             var entry = CreateUniverseEntry(underlyingSymbol);
 
-            if (underlyingHistory == null || underlyingHistory.Count == 0)
+            if (history == null || history.Count == 0)
             {
+                // TODO: This is here only for Lean repo data generation. This shouldn't be reached if data is guaranteed to be available.
+                history = ApiHistoryProvider.Instance.Value.GetHistory(new[] { underlyingHistoryRequest },
+                    marketHoursEntry.ExchangeHours.TimeZone).ToList();
+
+                if (history == null || history.Count == 0)
+                {
                 writer.WriteLine(entry.ToCsv());
-                return new List<Slice>();
+                    return;
+            }
             }
 
-            entry.Update(underlyingHistory[^1]);
+            entry.Update(history[^1]);
             writer.WriteLine(entry.ToCsv());
-
-            return underlyingHistory;
         }
 
         /// <summary>
         /// Generates and writes the derivative universe entries for the specified canonical symbol.
         /// </summary>
         /// <remarks>The underlying history is a List to avoid multiple enumerations of the history</remarks>
-        protected virtual void GenerateDerivativeLines(Symbol canonicalSymbol, IEnumerable<Symbol> symbols, List<Slice> underlyingHistory,
-            StreamWriter writer)
+        protected virtual void GenerateDerivativeLines(Symbol canonicalSymbol, IEnumerable<Symbol> symbols,
+            MarketHoursDatabase.Entry marketHoursEntry, List<Slice> underlyingHistory, StreamWriter writer)
         {
-            var marketHoursEntry = _marketHoursDatabase.GetEntry(canonicalSymbol.ID.Market, canonicalSymbol, canonicalSymbol.SecurityType);
-
-            var historyEnd = _processingDate.AddDays(1);
+            var historyEnd = _processingDate;
             var historyStart = Time.GetStartTimeForTradeBars(marketHoursEntry.ExchangeHours, historyEnd, _historyResolution.ToTimeSpan(),
                 _historyBarCount, false, marketHoursEntry.DataTimeZone);
 
             foreach (var symbol in symbols)
             {
-                Log.Trace($"Generating option universe entry for {symbol.Value}");
+                Log.Debug($"Generating universe entry for {symbol.Value}");
 
                 var historyRequests = GetDerivativeHistoryRequests(symbol, historyStart, historyEnd, marketHoursEntry);
                 var history = _historyProvider.GetHistory(historyRequests, marketHoursEntry.ExchangeHours.TimeZone);
@@ -325,7 +341,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected virtual HistoryRequest[] GetDerivativeHistoryRequests(Symbol symbol, DateTime start, DateTime end,
             MarketHoursDatabase.Entry marketHoursEntry)
         {
-            // TODO: This could be a virtual property
+            // TODO: This could be a virtual property if other derivatives need different data types
             var dataTypes = new[] { typeof(QuoteBar), typeof(OpenInterest) };
 
             return dataTypes.Select(dataType => new HistoryRequest(
@@ -363,5 +379,31 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// Factory method to create an instance of <see cref="IDerivativeUniverseFileEntry"/> for the given <paramref name="symbol"/>
         /// </summary>
         protected abstract IDerivativeUniverseFileEntry CreateUniverseEntry(Symbol symbol);
+    }
+
+    // TODO: This could be removed since it's only for Lean repo data generation locally, but it won't hurt to keep it
+    class ApiHistoryProvider
+    {
+        public static Lazy<IHistoryProvider> Instance = new Lazy<IHistoryProvider>(() =>
+        {
+            var api = Composer.Instance.GetExportedValueByTypeName<IApi>(Config.Get("api-handler", "Api"));
+            api.Initialize(Globals.UserId, Globals.UserToken, "./ApiInputData");
+
+            var dataProvider = new ApiDataProvider();
+            Composer.Instance.AddPart<IDataProvider>(dataProvider);
+
+            var mapFileProvider = new LocalZipMapFileProvider();
+            mapFileProvider.Initialize(dataProvider);
+
+            var factorFileProvider = new LocalZipFactorFileProvider();
+            factorFileProvider.Initialize(mapFileProvider, dataProvider);
+
+            var historyProvider = new SubscriptionDataReaderHistoryProvider();
+            var parameters = new HistoryProviderInitializeParameters(null, null, dataProvider, new ZipDataCacheProvider(dataProvider),
+                mapFileProvider, factorFileProvider, (_) => { }, true, new DataPermissionManager(), null, new AlgorithmSettings());
+            historyProvider.Initialize(parameters);
+
+            return historyProvider;
+        });
     }
 }
