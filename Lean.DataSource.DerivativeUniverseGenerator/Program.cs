@@ -47,42 +47,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         {
             Initialize(args, out var securityType, out var market, out var dataFolderRoot, out var outputFolderRoot);
 
-            // TODO: Remove
-            dataFolderRoot = "./InputData";
-            outputFolderRoot = "./OutputData";
-
-            //Config.Set("map-file-provider", "QuantConnect.Data.Auxiliary.LocalZipMapFileProvider");
-            //Config.Set("factor-file-provider", "QuantConnect.Data.Auxiliary.LocalZipFactorFileProvider");
-            //Config.Set("data-provider", "QuantConnect.Lean.Engine.DataFeeds.ApiDataProvider");
-            Config.Set("map-file-provider", "QuantConnect.Data.Auxiliary.LocalDiskMapFileProvider");
-            Config.Set("factor-file-provider", "QuantConnect.Data.Auxiliary.LocalDiskFactorFileProvider");
-            Config.Set("data-provider", "QuantConnect.Lean.Engine.DataFeeds.DefaultDataProvider");
-            Config.Set("data-folder", dataFolderRoot);
-            Config.Set("job-user-id", "200374");
-            Config.Set("api-access-token", "2bf9e6154875a89a9dedf4f2a4a3fece8b180233750e4cb4adfc65dcf865ebda");
-            Config.Set("job-organization-id", "d6d62db48592c72e67b534553413b691");
-
-            Globals.Reset();
-
             Log.Trace($"Security type: {securityType}. Market: {market}. Data folder: {dataFolderRoot}. Output folder: {outputFolderRoot}");
 
             var dateStr = Environment.GetEnvironmentVariable(DataFleetDeploymentDateEnvVariable) ?? $"{DateTime.UtcNow.Date:yyyyMMdd}";
             var processingDate = DateTime.ParseExact(dateStr, DateFormat.EightCharacter, CultureInfo.InvariantCulture);
-
-            // TODO: remove this next lines
-            securityType = SecurityType.Option;
-            processingDate = new DateTime(2015, 12, 24);
-            // ----------
-            //securityType = SecurityType.IndexOption;
-            //processingDate = new DateTime(2021, 01, 01);
-            // ----------
-            //securityType = SecurityType.FutureOption; // DC
-            //processingDate = new DateTime(2012, 01, 01);
-            //market = "cme";
-            // ----------
-            //securityType = SecurityType.FutureOption; // ES
-            //processingDate = new DateTime(2020, 01, 01);
-            //market = "cme";
 
             var optionsUniverseGenerator = GetUniverseGenerator(securityType, market, dataFolderRoot, outputFolderRoot, processingDate);
 
@@ -102,7 +70,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 Log.Error(ex, $"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Error generating options universe.");
                 Environment.Exit(1);
             }
-
             Log.Trace($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): DONE in {timer.Elapsed:g}");
 
             Environment.Exit(0);
