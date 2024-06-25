@@ -18,7 +18,6 @@ using System.IO;
 using System.Linq;
 using Lean.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Data;
-using QuantConnect.Data.Market;
 using QuantConnect.Securities;
 using QuantConnect.Util;
 
@@ -41,6 +40,10 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             string outputFolderRoot)
             : base(processingDate, securityType, market, dataFolderRoot, outputFolderRoot)
         {
+            if (securityType != SecurityType.Option)
+            {
+                throw new ArgumentException("Only SecurityType.Option is supported", nameof(securityType));
+            }
         }
 
         protected override IDerivativeUniverseFileEntry CreateUniverseEntry(Symbol symbol)
@@ -85,24 +88,15 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         protected override HistoryRequest[] GetDerivativeHistoryRequests(Symbol symbol, DateTime start, DateTime end, MarketHoursDatabase.Entry marketHoursEntry)
         {
+            // To avoid derivatives history requests, return an empty array
+            // return Array.Empty<HistoryRequest>();
+
             var requests = base.GetDerivativeHistoryRequests(symbol, start, end, marketHoursEntry);
 
             var mirrorOptionSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
-            var mirrorOptionHistoryRequest = new HistoryRequest(
-                start,
-                end,
-                typeof(QuoteBar),
-                mirrorOptionSymbol,
-                _historyResolution,
-                marketHoursEntry.ExchangeHours,
-                marketHoursEntry.DataTimeZone,
-                _historyResolution,
-                true,
-                false,
-                DataNormalizationMode.ScaledRaw,
-                TickType.Quote);
+            var mirrorOptionHistoryRequests = base.GetDerivativeHistoryRequests(mirrorOptionSymbol, start, end, marketHoursEntry);
 
-            return requests.Concat(new[] { mirrorOptionHistoryRequest }).ToArray();
+            return requests.Concat(mirrorOptionHistoryRequests).ToArray();
         }
     }
 }

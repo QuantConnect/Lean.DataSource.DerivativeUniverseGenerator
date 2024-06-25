@@ -47,15 +47,16 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         {
             Initialize(args, out var securityType, out var market, out var dataFolderRoot, out var outputFolderRoot);
 
-            Log.Trace($"Security type: {securityType}. Market: {market}. Data folder: {dataFolderRoot}. Output folder: {outputFolderRoot}");
+            Log.Trace($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): " +
+                $"Security type: {securityType}. Market: {market}. Data folder: {dataFolderRoot}. Output folder: {outputFolderRoot}");
 
             var dateStr = Environment.GetEnvironmentVariable(DataFleetDeploymentDateEnvVariable) ?? $"{DateTime.UtcNow.Date:yyyyMMdd}";
             var processingDate = DateTime.ParseExact(dateStr, DateFormat.EightCharacter, CultureInfo.InvariantCulture);
 
-            var optionsUniverseGenerator = GetUniverseGenerator(securityType, market, dataFolderRoot, outputFolderRoot, processingDate);
-
             var timer = new Stopwatch();
             timer.Start();
+
+            var optionsUniverseGenerator = GetUniverseGenerator(securityType, market, dataFolderRoot, outputFolderRoot, processingDate);
 
             try
             {
@@ -70,6 +71,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 Log.Error(ex, $"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Error generating options universe.");
                 Environment.Exit(1);
             }
+
             Log.Trace($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): DONE in {timer.Elapsed:g}");
 
             Environment.Exit(0);
@@ -101,6 +103,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 throw new ArgumentException("Missing market.");
             }
 
+            // TODO: Should we set the "data-folder" config to "processed-data-directory"?
             dataFolderRoot = Config.Get("processed-data-directory", Globals.DataFolder);
             outputFolderRoot = Config.Get("temp-output-folder", "/temp-output-directory");
         }

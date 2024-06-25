@@ -37,9 +37,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
     /// </summary>
     public abstract class DerivativeUniverseGenerator
     {
-        // TODO: This could be removed since it's only for Lean repo data generation locally, but it won't hurt to keep it
-        protected static readonly Resolution[] Resolutions = new[] { Resolution.Minute, Resolution.Hour, Resolution.Daily };
-
         protected readonly DateTime _processingDate;
         protected readonly SecurityType _securityType;
         protected readonly string _market;
@@ -54,8 +51,16 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
         protected readonly IDataProvider _dataProvider;
         protected readonly ZipDataCacheProvider _dataCacheProvider;
-        protected readonly SubscriptionDataReaderHistoryProvider _historyProvider;
+        protected readonly IHistoryProvider _historyProvider;
         protected readonly MarketHoursDatabase _marketHoursDatabase;
+
+        /// <summary>
+        /// Careful: using other resolutions might introduce a look-ahead bias. For instance, if Daily resolution is used,
+        /// yearly files will be used and the options chain read from disk would contain contracts from all year round,
+        /// without considering the actual IPO date of the contract at X point in time of the year.
+        /// Made virtual to allow for customization for Lean local repo options universe generator.
+        /// </summary>
+        protected virtual Resolution[] Resolutions { get; } = new[] { Resolution.Minute };
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DerivativeUniverseGenerator" /> class.
@@ -87,26 +92,11 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 _market,
                 "universes");
 
-            //_dataProvider = new ProcessedDataProvider();
-            // TODO: Remove. This is only for Lean repo data generation locally
             _dataProvider = new DefaultDataProvider();
-
             _dataCacheProvider = new ZipDataCacheProvider(_dataProvider);
-
-            //var mapFileProvider = new LocalDiskMapFileProvider();
-            var mapFileProvider = new LocalZipMapFileProvider();
-            mapFileProvider.Initialize(_dataProvider);
-            Composer.Instance.AddPart<IMapFileProvider>(mapFileProvider);
-
-            //var factorFileProvider = new LocalDiskFactorFileProvider();
-            var factorFileProvider = new LocalZipFactorFileProvider();
-            factorFileProvider.Initialize(mapFileProvider, _dataProvider);
-            Composer.Instance.AddPart<IFactorFileProvider>(factorFileProvider);
-
-            _historyProvider = new SubscriptionDataReaderHistoryProvider();
-            var parameters = new HistoryProviderInitializeParameters(null, null, _dataProvider, _dataCacheProvider, mapFileProvider,
-                factorFileProvider, (_) => { }, true, new DataPermissionManager(), null, new AlgorithmSettings());
-            _historyProvider.Initialize(parameters);
+            _historyProvider = GetHistoryProvider(_dataProvider, _dataCacheProvider, out var mapFileProvider, out var factorFileProvider);
+            Composer.Instance.AddPart(mapFileProvider);
+            Composer.Instance.AddPart(factorFileProvider);
 
             _marketHoursDatabase = MarketHoursDatabase.FromDataFolder();
         }
@@ -297,15 +287,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             if (history == null || history.Count == 0)
             {
-                // TODO: This is here only for Lean repo data generation. This shouldn't be reached if data is guaranteed to be available.
-                history = ApiHistoryProvider.Instance.Value.GetHistory(new[] { underlyingHistoryRequest },
-                    marketHoursEntry.ExchangeHours.TimeZone).ToList();
-
-                if (history == null || history.Count == 0)
-                {
                 writer.WriteLine(entry.ToCsv());
                     return;
-            }
             }
 
             entry.Update(history[^1]);
@@ -328,8 +311,17 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 Log.Debug($"Generating universe entry for {symbol.Value}");
 
                 var historyRequests = GetDerivativeHistoryRequests(symbol, historyStart, historyEnd, marketHoursEntry);
+
+                IDerivativeUniverseFileEntry entry;
+                if (historyRequests == null || historyRequests.Length == 0)
+                {
+                    entry = GenerateDerivativeEntry(symbol, Enumerable.Empty<Slice>(), Enumerable.Empty<Slice>().ToList());
+                }
+                else
+                {
                 var history = _historyProvider.GetHistory(historyRequests, marketHoursEntry.ExchangeHours.TimeZone);
-                var entry = GenerateDerivativeEntry(symbol, history, underlyingHistory);
+                    entry = GenerateDerivativeEntry(symbol, history, underlyingHistory);
+                }
 
                 writer.WriteLine(entry.ToCsv());
             }
@@ -379,31 +371,30 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// Factory method to create an instance of <see cref="IDerivativeUniverseFileEntry"/> for the given <paramref name="symbol"/>
         /// </summary>
         protected abstract IDerivativeUniverseFileEntry CreateUniverseEntry(Symbol symbol);
-    }
 
-    // TODO: This could be removed since it's only for Lean repo data generation locally, but it won't hurt to keep it
-    class ApiHistoryProvider
-    {
-        public static Lazy<IHistoryProvider> Instance = new Lazy<IHistoryProvider>(() =>
+        /// <summary>
+        /// Gets the history provider to be used to retrieve the historical data for the universe generation
+        /// </summary>
+        /// <remarks>
+        /// Made virtual to allow for easier test data generation.
+        /// </remarks>
+        protected virtual IHistoryProvider GetHistoryProvider(IDataProvider dataProvider, ZipDataCacheProvider dataCacheProvider,
+            out IMapFileProvider mapFileProvider, out IFactorFileProvider factorFileProvider)
         {
-            var api = Composer.Instance.GetExportedValueByTypeName<IApi>(Config.Get("api-handler", "Api"));
-            api.Initialize(Globals.UserId, Globals.UserToken, "./ApiInputData");
-
-            var dataProvider = new ApiDataProvider();
-            Composer.Instance.AddPart<IDataProvider>(dataProvider);
-
-            var mapFileProvider = new LocalZipMapFileProvider();
+            mapFileProvider = new LocalZipMapFileProvider();
             mapFileProvider.Initialize(dataProvider);
 
-            var factorFileProvider = new LocalZipFactorFileProvider();
+            factorFileProvider = new LocalZipFactorFileProvider();
             factorFileProvider.Initialize(mapFileProvider, dataProvider);
 
-            var historyProvider = new SubscriptionDataReaderHistoryProvider();
-            var parameters = new HistoryProviderInitializeParameters(null, null, dataProvider, new ZipDataCacheProvider(dataProvider),
-                mapFileProvider, factorFileProvider, (_) => { }, true, new DataPermissionManager(), null, new AlgorithmSettings());
+            var api = Composer.Instance.GetExportedValueByTypeName<IApi>(Config.Get("api-handler"));
+
+            var historyProvider = new HistoryProviderManager();
+            var parameters = new HistoryProviderInitializeParameters(null, api, dataProvider, dataCacheProvider, mapFileProvider,
+                factorFileProvider, (_) => { }, true, new DataPermissionManager(), null, new AlgorithmSettings());
             historyProvider.Initialize(parameters);
 
             return historyProvider;
-        });
+        }
     }
 }
