@@ -434,16 +434,33 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             return _historyProvider;
         }
 
+        /// <summary>
+        /// Gets the history provider to be used to retrieve the historical data for the underlying securities.
+        /// It defaults to the same history provider as the one used for the derivatives,
+        /// by calling <see cref="GetHistoryProvider(IDataProvider, ZipDataCacheProvider, out IMapFileProvider, out IFactorFileProvider)"/>
+        /// </summary>
         protected virtual IHistoryProvider GetUnderlyingHistoryProvider(IDataProvider dataProvider, ZipDataCacheProvider dataCacheProvider)
         {
             return GetHistoryProvider(dataProvider, dataCacheProvider, out _, out _);
         }
 
+        /// <summary>
+        /// Gets a history provider to be used to retrieve the historical data for the derivative securities.
+        /// If not null, it will be used to retrieve the historical data when the primary one returns no data.
+        /// </summary>
+        /// <returns></returns>
         protected virtual IHistoryProvider GetSecondaryHistoryProvider()
         {
             return null;
         }
 
+        /// <summary>
+        /// Gets a history provider to be used to retrieve the historical data for the underlying securities.
+        /// If not null, it will be used to retrieve the historical data when the primary one returns no data.
+        /// It defaults to the same secondary history provider as the one used for the derivatives,
+        /// by calling <see cref="GetSecondaryHistoryProvider"/>
+        /// </summary>
+        /// <returns></returns>
         protected virtual IHistoryProvider GetSecondaryUnderlyingHistoryProvider()
         {
             return GetSecondaryHistoryProvider();
