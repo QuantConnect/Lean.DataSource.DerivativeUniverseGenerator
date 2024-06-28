@@ -36,6 +36,8 @@ namespace QuantConnect.DataSource.LeanRepoOptionsUniverseGenerator
 
         protected override Resolution[] HistoryResolutions { get; } = new[] { Resolution.Minute, Resolution.Hour, Resolution.Daily };
 
+        protected override bool ForceUseBaseUnderlyingHistoryProvider => true;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="LeanRepoOptionsUniverseGenerator" /> class.
         /// </summary>
@@ -48,6 +50,14 @@ namespace QuantConnect.DataSource.LeanRepoOptionsUniverseGenerator
             string outputFolderRoot)
             : base(processingDate, securityType, market, dataFolderRoot, outputFolderRoot)
         {
+        }
+
+        /// <summary>
+        /// Gets the history provider to be used to underlying security data
+        /// </summary>
+        protected override IHistoryProvider GetUnderlyingHistoryProvider(IDataProvider dataProvider, ZipDataCacheProvider dataCacheProvider)
+        {
+            return base.GetUnderlyingHistoryProvider(dataProvider, dataCacheProvider);
         }
 
         /// <summary>
