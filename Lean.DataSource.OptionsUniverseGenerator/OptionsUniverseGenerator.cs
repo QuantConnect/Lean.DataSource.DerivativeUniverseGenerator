@@ -40,9 +40,9 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             string outputFolderRoot)
             : base(processingDate, securityType, market, dataFolderRoot, outputFolderRoot)
         {
-            if (securityType != SecurityType.Option)
+            if (securityType != SecurityType.Option && securityType != SecurityType.IndexOption)
             {
-                throw new ArgumentException("Only SecurityType.Option is supported", nameof(securityType));
+                throw new ArgumentException($"Only {nameof(SecurityType.Option)} and {nameof(SecurityType.IndexOption)} are supported", nameof(securityType));
             }
         }
 

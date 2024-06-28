@@ -82,6 +82,8 @@ namespace QuantConnect.DataSource.LeanRepoOptionsUniverseGenerator
                         Log.Error(ex, $"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Error generating options universe.");
                         Environment.Exit(1);
                     }
+
+                    Composer.Instance.Reset();
                 }
             }
 

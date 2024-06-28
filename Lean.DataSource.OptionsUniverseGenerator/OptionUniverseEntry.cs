@@ -81,8 +81,8 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         public override string ToCsv()
         {
-            // Use Lean's OptionsUniverse class to generate the CSV to avoid writing/reading mistakes
-            var optionUniverse = new OptionsUniverse(Time.BeginningOfTime, Symbol, Open, High, Low, Close, Volume,
+            // Use Lean's OptionUniverse class to generate the CSV to avoid writing/reading mistakes
+            var optionUniverse = new OptionUniverse(Time.BeginningOfTime, Symbol, Open, High, Low, Close, Volume,
                 OpenInterest, ImpliedVolatility, Greeks);
 
             return optionUniverse.ToCsv();

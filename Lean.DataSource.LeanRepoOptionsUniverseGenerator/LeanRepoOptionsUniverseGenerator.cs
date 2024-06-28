@@ -30,7 +30,11 @@ namespace QuantConnect.DataSource.LeanRepoOptionsUniverseGenerator
     /// </summary>
     public class LeanRepoOptionsUniverseGenerator : OptionsUniverseGenerator.OptionsUniverseGenerator
     {
-        protected override Resolution[] Resolutions => new[] { Resolution.Minute, Resolution.Hour, Resolution.Daily };
+        private IHistoryProvider _historyProvider;
+
+        protected override Resolution[] Resolutions { get; } = new[] { Resolution.Minute, Resolution.Hour, Resolution.Daily };
+
+        protected override Resolution HistoryResolution { get; } = Resolution.Minute;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LeanRepoOptionsUniverseGenerator" /> class.
@@ -49,27 +53,31 @@ namespace QuantConnect.DataSource.LeanRepoOptionsUniverseGenerator
         /// <summary>
         /// Gets the history provider to be used to retrieve the historical data for the universe generation
         /// </summary>
-        protected override IHistoryProvider GetHistoryProvider(IDataProvider dataProvider, ZipDataCacheProvider dataCacheProvider,
-            out IMapFileProvider mapFileProvider, out IFactorFileProvider factorFileProvider)
+        protected override IHistoryProvider GetSecondaryUnderlyingHistoryProvider()
         {
+            if (_historyProvider != null)
+            {
+                return _historyProvider;
+            }
+
             var api = Composer.Instance.GetExportedValueByTypeName<IApi>(Config.Get("api-handler", "Api"));
             api.Initialize(Globals.UserId, Globals.UserToken, "./ApiInputData");
 
-            var dataProviderToUse = new ApiDataProvider();
-            Composer.Instance.AddPart<IDataProvider>(dataProviderToUse);
+            var dataProvider = new ApiDataProvider();
+            //Composer.Instance.AddPart<IDataProvider>(dataProviderToUse);
 
-            mapFileProvider = new LocalZipMapFileProvider();
-            mapFileProvider.Initialize(dataProviderToUse);
+            var mapFileProvider = new LocalZipMapFileProvider();
+            mapFileProvider.Initialize(dataProvider);
 
-            factorFileProvider = new LocalZipFactorFileProvider();
-            factorFileProvider.Initialize(mapFileProvider, dataProviderToUse);
+            var factorFileProvider = new LocalZipFactorFileProvider();
+            factorFileProvider.Initialize(mapFileProvider, dataProvider);
 
-            var historyProvider = new SubscriptionDataReaderHistoryProvider();
-            var parameters = new HistoryProviderInitializeParameters(null, null, dataProviderToUse, new ZipDataCacheProvider(dataProviderToUse),
+            _historyProvider = new SubscriptionDataReaderHistoryProvider();
+            var parameters = new HistoryProviderInitializeParameters(null, null, dataProvider, new ZipDataCacheProvider(dataProvider),
                 mapFileProvider, factorFileProvider, (_) => { }, true, new DataPermissionManager(), null, new AlgorithmSettings());
-            historyProvider.Initialize(parameters);
+            _historyProvider.Initialize(parameters);
 
-            return historyProvider;
+            return _historyProvider;
         }
 
         /// <summary>
