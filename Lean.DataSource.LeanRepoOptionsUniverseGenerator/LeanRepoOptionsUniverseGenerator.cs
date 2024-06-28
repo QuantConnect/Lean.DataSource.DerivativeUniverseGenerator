@@ -34,7 +34,7 @@ namespace QuantConnect.DataSource.LeanRepoOptionsUniverseGenerator
 
         protected override Resolution[] Resolutions { get; } = new[] { Resolution.Minute, Resolution.Hour, Resolution.Daily };
 
-        protected override Resolution HistoryResolution { get; } = Resolution.Minute;
+        protected override Resolution[] HistoryResolutions { get; } = new[] { Resolution.Minute, Resolution.Hour, Resolution.Daily };
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LeanRepoOptionsUniverseGenerator" /> class.
