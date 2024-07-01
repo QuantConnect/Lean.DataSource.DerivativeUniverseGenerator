@@ -16,12 +16,10 @@
 using System;
 using System.IO;
 using System.Linq;
-using Lean.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Data;
-using QuantConnect.Interfaces;
-using QuantConnect.Lean.Engine.DataFeeds;
-using QuantConnect.Securities;
 using QuantConnect.Util;
+using QuantConnect.Securities;
+using Lean.DataSource.DerivativeUniverseGenerator;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -30,14 +28,6 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
     /// </summary>
     public class OptionsUniverseGenerator : DerivativeUniverseGenerator.DerivativeUniverseGenerator
     {
-        private IHistoryProvider _underlyingHistoryProvider;
-
-        /// <summary>
-        /// Use to force using the base history provider for underlying securities.
-        /// If false, index prices will be fetched using the <see cref="IndexHistoryProvider"/>.
-        /// </summary>
-        protected virtual bool ForceUseBaseUnderlyingHistoryProvider => false;
-
         /// <summary>
         /// Initializes a new instance of the <see cref="OptionsUniverseGenerator" /> class.
         /// </summary>
@@ -94,37 +84,12 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         protected override HistoryRequest[] GetDerivativeHistoryRequests(Symbol symbol, DateTime start, DateTime end, MarketHoursDatabase.Entry marketHoursEntry)
         {
-            // To avoid derivatives history requests, return an empty array
-            // return Array.Empty<HistoryRequest>();
-
             var requests = base.GetDerivativeHistoryRequests(symbol, start, end, marketHoursEntry);
 
             var mirrorOptionSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
             var mirrorOptionHistoryRequests = base.GetDerivativeHistoryRequests(mirrorOptionSymbol, start, end, marketHoursEntry);
 
             return requests.Concat(mirrorOptionHistoryRequests).ToArray();
-        }
-
-        /// <summary>
-        /// Gets the history provider to use for the underlying security prices.
-        /// It will use the <see cref="IndexHistoryProvider"/> for indices.
-        /// </summary>
-        protected override IHistoryProvider GetUnderlyingHistoryProvider(IDataProvider dataProvider, ZipDataCacheProvider dataCacheProvider)
-        {
-            if (_underlyingHistoryProvider == null)
-            {
-                if (!ForceUseBaseUnderlyingHistoryProvider && _securityType == SecurityType.IndexOption)
-                {
-                    _underlyingHistoryProvider = new IndexHistoryProvider();
-                    _underlyingHistoryProvider.Initialize(null);
-                }
-                else
-                {
-                    _underlyingHistoryProvider = base.GetUnderlyingHistoryProvider(dataProvider, dataCacheProvider);
-                }
-            }
-
-            return _underlyingHistoryProvider;
         }
     }
 }

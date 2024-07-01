@@ -24,7 +24,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\Lean\Tests\QuantConnect.Tests.csproj" />
 		<ProjectReference Include="..\Lean.DataSource.OptionsUniverseGenerator\Lean.DataSource.OptionsUniverseGenerator.csproj" />
 	</ItemGroup>
 

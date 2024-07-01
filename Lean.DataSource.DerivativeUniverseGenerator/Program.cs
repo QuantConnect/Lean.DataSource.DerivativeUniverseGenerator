@@ -41,7 +41,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
     /// </remarks>
     public abstract class Program
     {
-        protected static string DataFleetDeploymentDateEnvVariable = "QC_DATAFLEET_DEPLOYMENT_DATE";
+        private static readonly string DataFleetDeploymentDateEnvVariable = "QC_DATAFLEET_DEPLOYMENT_DATE";
 
         protected virtual void MainImpl(string[] args)
         {
@@ -49,6 +49,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             Log.Trace($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): " +
                 $"Security type: {securityType}. Market: {market}. Data folder: {dataFolderRoot}. Output folder: {outputFolderRoot}");
+            Log.DebuggingEnabled = Config.GetBool("debug-mode");
 
             var dateStr = Environment.GetEnvironmentVariable(DataFleetDeploymentDateEnvVariable) ?? $"{DateTime.UtcNow.Date:yyyyMMdd}";
             var processingDate = DateTime.ParseExact(dateStr, DateFormat.EightCharacter, CultureInfo.InvariantCulture);
@@ -92,15 +93,16 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 !Enum.TryParse(securityTypeStr, true, out securityType) ||
                 !Enum.IsDefined(typeof(SecurityType), securityType))
             {
-                if (!Config.TryGetValue("security-type", out securityType))
+                if (!Config.TryGetValue("security-type", SecurityType.Option, out securityType))
                 {
                     throw new ArgumentException("Invalid or missing security type.");
                 }
             }
 
-            if (!argsData.TryGetValue("--market", out market) && !Config.TryGetValue("market", out market))
+            if (!argsData.TryGetValue("--market", out market) && !Config.TryGetValue("market", out market) || string.IsNullOrEmpty(market))
             {
-                throw new ArgumentException("Missing market.");
+                market = Market.USA;
+                Log.Trace($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): no market given, defaulting to '{market}'");
             }
 
             // TODO: Should we set the "data-folder" config to "processed-data-directory"?

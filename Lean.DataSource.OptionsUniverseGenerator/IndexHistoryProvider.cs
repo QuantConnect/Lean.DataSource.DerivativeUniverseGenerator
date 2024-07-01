@@ -13,27 +13,31 @@
  * limitations under the License.
 */
 
-using NodaTime;
-using System.Collections.Generic;
-using QuantConnect.Data;
-using QuantConnect.Lean.Engine.HistoricalData;
-using QuantConnect.Lean.Engine.DataFeeds;
 using System;
-using QuantConnect.Logging;
-using Newtonsoft.Json;
-using QuantConnect.Data.Market;
+using NodaTime;
 using RestSharp;
+using Newtonsoft.Json;
+using System.Threading;
+using QuantConnect.Data;
+using QuantConnect.Logging;
+using QuantConnect.Data.Market;
+using System.Collections.Generic;
+using QuantConnect.Lean.Engine.DataFeeds;
+using QuantConnect.Lean.Engine.HistoricalData;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
     /// <summary>
+    /// Index history provider, will use yahoo finance to fetch latest prices
     /// </summary>
     public partial class IndexHistoryProvider : SynchronizingHistoryProvider
     {
+        private bool _securityTypeLog;
+        private bool _resolutionLog;
+        private bool _dataTypeLog;
         private readonly static string YahooFinanceApiUrl = "https://query1.finance.yahoo.com/v8/finance";
 
-        private bool _initialized;
-        private RestClient _restClient;
+        private readonly RestClient _restClient = new(YahooFinanceApiUrl);
 
         /// <summary>
         /// Initializes this history provider to work for the specified job
@@ -41,12 +45,6 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// <param name="parameters">The initialization parameters</param>
         public override void Initialize(HistoryProviderInitializeParameters parameters)
         {
-            if (_initialized)
-            {
-                throw new InvalidOperationException("IndexHistoryProvider.Initialize(): Already initialized.");
-            }
-
-            _restClient = new RestClient(YahooFinanceApiUrl);
         }
 
         /// <summary>
@@ -86,22 +84,34 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         {
             if (request.Symbol.SecurityType != SecurityType.Index)
             {
-                Log.Debug($"IndexHistoryProvider.GetHistory(): Invalid security type. " +
-                    $"The {nameof(IndexHistoryProvider)} can only provide history for {SecurityType.Index} securities.");
+                if (!_securityTypeLog)
+                {
+                    _securityTypeLog = true;
+                    Log.Error($"IndexHistoryProvider.GetHistory(): Invalid security type. " +
+                        $"The {nameof(IndexHistoryProvider)} can only provide history for {SecurityType.Index} securities.");
+                }
                 return null;
             }
 
             if (request.Resolution != Resolution.Daily)
             {
-                Log.Debug($"IndexHistoryProvider.GetHistory(): Invalid resolution. " +
-                    $"The {nameof(IndexHistoryProvider)} can only provide history for {Resolution.Daily} resolution.");
+                if (!_resolutionLog)
+                {
+                    _resolutionLog = true;
+                    Log.Error($"IndexHistoryProvider.GetHistory(): Invalid resolution. " +
+                        $"The {nameof(IndexHistoryProvider)} can only provide history for {Resolution.Daily} resolution.");
+                }
                 return null;
             }
 
             if (request.TickType != TickType.Trade)
             {
-                Log.Debug($"IndexHistoryProvider.GetHistory(): Invalid tick type. " +
-                    $"The {nameof(IndexHistoryProvider)} can only provide history for {TickType.Trade} tick type.");
+                if (!_dataTypeLog)
+                {
+                    _dataTypeLog = true;
+                    Log.Error($"IndexHistoryProvider.GetHistory(): Invalid tick type. " +
+                        $"The {nameof(IndexHistoryProvider)} can only provide history for {TickType.Trade} tick type.");
+                }
                 return null;
             }
 
@@ -109,36 +119,43 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             var start = Time.DateTimeToUnixTimeStamp(request.StartTimeUtc);
             var end = Time.DateTimeToUnixTimeStamp(request.EndTimeUtc);
 
-            var restRequest = new RestRequest($"chart/{symbol}");
-            restRequest.AddQueryParameter("period1", start.ToString());
-            restRequest.AddQueryParameter("period2", end.ToString());
-            restRequest.AddQueryParameter("interval", "1d");
-            restRequest.AddQueryParameter("includePrePost", request.IncludeExtendedMarketHours.ToString());
-            var response = _restClient.Get(restRequest);
-
-            if (response.StatusCode != System.Net.HttpStatusCode.OK)
+            // let's retry on failure
+            for (var retryCount = 0; retryCount < 5; retryCount++)
             {
-                Log.Debug($"IndexHistoryProvider.GetHistory(): Failed to get history for {symbol}. Status code: {response.StatusCode}.");
-                return null;
-            }
+                var restRequest = new RestRequest($"chart/{symbol}");
+                restRequest.AddQueryParameter("period1", start.ToString());
+                restRequest.AddQueryParameter("period2", end.ToString());
+                restRequest.AddQueryParameter("interval", "1d");
+                restRequest.AddQueryParameter("includePrePost", request.IncludeExtendedMarketHours.ToString());
 
-            var content = response.Content;
-            try
-            {
-                var indexPrices = JsonConvert.DeserializeObject<YahooFinanceIndexPrices>(content);
-                if (indexPrices == null)
+                try
                 {
-                    Log.Debug($"IndexHistoryProvider.GetHistory(): Failed to deserialize response for {symbol}.");
-                    return null;
-                }
+                    var response = _restClient.Get(restRequest);
+                    if (response.StatusCode != System.Net.HttpStatusCode.OK)
+                    {
+                        Log.Error($"IndexHistoryProvider.GetHistory(): Failed to get history for {symbol}. Status code: {response.StatusCode}.");
+                        Thread.Sleep(Time.OneSecond);
+                        continue;
+                    }
 
-                return ParseHistory(request.Symbol, indexPrices, request.ExchangeHours.TimeZone, request.DataTimeZone);
+                    var content = response.Content;
+                    var indexPrices = JsonConvert.DeserializeObject<YahooFinanceIndexPrices>(content);
+                    if (indexPrices == null)
+                    {
+                        Log.Error($"IndexHistoryProvider.GetHistory(): Failed to deserialize response for {symbol}.");
+                        Thread.Sleep(Time.OneSecond);
+                        continue;
+                    }
+                    return ParseHistory(request.Symbol, indexPrices, request.ExchangeHours.TimeZone, request.DataTimeZone);
+                }
+                catch (Exception exception)
+                {
+                    Log.Error($"IndexHistoryProvider.GetHistory(): Failed to parse response for {symbol}. Exception: {exception}");
+                    Thread.Sleep(Time.OneSecond);
+                    continue;
+                }
             }
-            catch (Exception exception)
-            {
-                Log.Debug($"IndexHistoryProvider.GetHistory(): Failed to parse response for {symbol}. Exception: {exception}");
-                return null;
-            }
+            return null;
         }
 
         private IEnumerable<BaseData> ParseHistory(Symbol symbol, YahooFinanceIndexPrices indexPrices, DateTimeZone exchangeTimeZone, DateTimeZone dataTimeZone)

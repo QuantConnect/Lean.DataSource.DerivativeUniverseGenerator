@@ -110,13 +110,7 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
         /// </summary>
         public virtual string ToCsv()
         {
-            var sid = Symbol.ID.ToString();
-            if (Symbol.SecurityType.IsOption())
-            {
-                sid = sid.Replace($"|{Symbol.Underlying.ID}", "");
-            }
-
-            return $"{sid},{Symbol.Value},{Open},{High},{Low},{Close},{Volume}";
+            return $"{Symbol.ID},{Symbol.Value},{Open},{High},{Low},{Close},{Volume}";
         }
     }
 }

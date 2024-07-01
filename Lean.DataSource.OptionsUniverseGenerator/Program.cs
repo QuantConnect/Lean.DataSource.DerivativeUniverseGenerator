@@ -30,7 +30,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
     {
         public static void Main(string[] args)
         {
-            Program program = new Program();
+            Program program = new();
             program.MainImpl(args);
         }
 
