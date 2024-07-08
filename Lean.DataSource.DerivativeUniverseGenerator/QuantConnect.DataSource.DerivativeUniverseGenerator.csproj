@@ -25,13 +25,11 @@
 		<DefineConstants>TRACE</DefineConstants>
 	</PropertyGroup>
 
-	<!--
 	<ItemGroup>
 		<Content Include="config.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 	</ItemGroup>
-	-->
 
 	<!--
 	<ItemGroup>

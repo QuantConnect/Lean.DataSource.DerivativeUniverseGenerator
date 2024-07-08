@@ -67,16 +67,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             };
 
             Directory.CreateDirectory(universeDirectory);
-
-            var marketHoursEntry = _marketHoursDatabase.GetEntry(canonicalSymbol.ID.Market, canonicalSymbol, canonicalSymbol.SecurityType);
-            var previousTradingDate = Time.GetStartTimeForTradeBars(
-                marketHoursEntry.ExchangeHours,
-                _processingDate.ConvertTo(marketHoursEntry.DataTimeZone, marketHoursEntry.ExchangeHours.TimeZone),
-                Time.OneDay,
-                1,
-                false,
-                marketHoursEntry.DataTimeZone).ConvertTo(marketHoursEntry.ExchangeHours.TimeZone, marketHoursEntry.DataTimeZone);
-            return Path.Combine(universeDirectory, $"{previousTradingDate:yyyyMMdd}.csv");
+            return Path.Combine(universeDirectory, $"{_processingDate:yyyyMMdd}.csv");
         }
 
         /// <summary>

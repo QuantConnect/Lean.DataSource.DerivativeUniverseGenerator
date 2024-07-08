@@ -137,7 +137,7 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
             return zipEntries
                 .Select(zipEntry => LeanData.ReadSymbolFromZipEntry(canonicalSymbol, resolution, zipEntry))
                 // do not return expired contracts
-                .Where(symbol => _processingDate.Date <= symbol.ID.Date.Date)
+                .Where(symbol => _processingDate.Date < symbol.ID.Date.Date)
                 .OrderBy(symbol => symbol.ID.OptionRight)
                 .ThenBy(symbol => symbol.ID.StrikePrice)
                 .ThenBy(symbol => symbol.ID.Date)

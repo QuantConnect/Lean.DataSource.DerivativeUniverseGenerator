@@ -47,7 +47,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected readonly string _dataSourceFolder;
         protected readonly string _universesOutputFolderRoot;
 
-
         private readonly IDataProvider _dataProvider;
         private readonly IHistoryProvider _historyProvider;
         private readonly ZipDataCacheProvider _dataCacheProvider;
