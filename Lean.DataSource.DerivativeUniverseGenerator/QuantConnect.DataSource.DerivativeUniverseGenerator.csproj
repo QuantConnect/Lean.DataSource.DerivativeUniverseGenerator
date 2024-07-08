@@ -2,10 +2,10 @@
 	<PropertyGroup>
 		<OutputType>Library</OutputType>
 		<TargetFramework>net6.0</TargetFramework>
-		<AssemblyName>Lean.DataSource.DerivativeUniverseGenerator</AssemblyName>
-		<AssemblyTitle>Lean.DataSource.DerivativeUniverseGenerator</AssemblyTitle>
+		<AssemblyName>QuantConnect.DataSource.DerivativeUniverseGenerator</AssemblyName>
+		<AssemblyTitle>QuantConnect.DataSource.DerivativeUniverseGenerator</AssemblyTitle>
 		<AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-		<Product>Lean.DataSource.DerivativeUniverseGenerator</Product>
+		<Product>QuantConnect.DataSource.DerivativeUniverseGenerator</Product>
 		<Copyright>Copyright © 2024</Copyright>
 		<PlatformTarget>AnyCPU</PlatformTarget>
 		<OutputPath>bin\$(Configuration)\</OutputPath>

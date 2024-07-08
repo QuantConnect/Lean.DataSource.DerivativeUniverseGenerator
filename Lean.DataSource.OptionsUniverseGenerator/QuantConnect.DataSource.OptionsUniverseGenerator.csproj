@@ -2,10 +2,10 @@
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
 		<TargetFramework>net6.0</TargetFramework>
-		<AssemblyName>Lean.DataSource.OptionsUniverseGenerator</AssemblyName>
-		<AssemblyTitle>Lean.DataSource.OptionsUniverseGenerator</AssemblyTitle>
+		<AssemblyName>QuantConnect.DataSource.OptionsUniverseGenerator</AssemblyName>
+		<AssemblyTitle>QuantConnect.DataSource.OptionsUniverseGenerator</AssemblyTitle>
 		<AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-		<Product>Lean.DataSource.OptionsUniverseGenerator</Product>
+		<Product>QuantConnect.DataSource.OptionsUniverseGenerator</Product>
 		<Copyright>Copyright © 2024</Copyright>
 		<PlatformTarget>AnyCPU</PlatformTarget>
 		<OutputPath>bin\$(Configuration)\</OutputPath>
