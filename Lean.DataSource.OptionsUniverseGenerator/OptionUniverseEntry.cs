@@ -93,6 +93,8 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         private class GreeksIndicators
         {
+            private readonly static IRiskFreeInterestRateModel _interestRateProvider = new InterestRateProvider();
+
             private readonly Symbol _optionSymbol;
             private readonly Symbol _mirrorOptionSymbol;
 
@@ -107,17 +109,13 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 _optionSymbol = optionSymbol;
                 _mirrorOptionSymbol = mirrorOptionSymbol;
 
-                var riskFreeInterestRateModel = new InterestRateProvider();
-                var funcRiskFreeInterestRateModel = new FuncRiskFreeRateInterestRateModel(
-                    (datetime) => riskFreeInterestRateModel.GetInterestRate(datetime));
-
                 var dividendYieldModel = DividendYieldProvider.CreateForOption(_optionSymbol);
 
-                _delta = new Delta(_optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, _mirrorOptionSymbol);
-                _gamma = new Gamma(_optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, _mirrorOptionSymbol);
-                _vega = new Vega(_optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, _mirrorOptionSymbol);
-                _theta = new Theta(_optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, _mirrorOptionSymbol);
-                _rho = new Rho(_optionSymbol, funcRiskFreeInterestRateModel, dividendYieldModel, _mirrorOptionSymbol);
+                _delta = new Delta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
+                _gamma = new Gamma(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
+                _vega = new Vega(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
+                _theta = new Theta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
+                _rho = new Rho(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
             }
 
             public void Update(Slice slice)
