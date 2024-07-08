@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.8.34525.116
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lean.DataSource.DerivativeUniverseGenerator", "Lean.DataSource.DerivativeUniverseGenerator\Lean.DataSource.DerivativeUniverseGenerator.csproj", "{AB0D2BA8-8AD1-43AA-814E-4EF31AB74502}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuantConnect.DataSource.DerivativeUniverseGenerator", "Lean.DataSource.DerivativeUniverseGenerator\QuantConnect.DataSource.DerivativeUniverseGenerator.csproj", "{AB0D2BA8-8AD1-43AA-814E-4EF31AB74502}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lean.DataSource.OptionsUniverseGenerator", "Lean.DataSource.OptionsUniverseGenerator\Lean.DataSource.OptionsUniverseGenerator.csproj", "{E6851F7A-200C-4A7F-BDB3-AA215EF7E390}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuantConnect.DataSource.OptionsUniverseGenerator", "Lean.DataSource.OptionsUniverseGenerator\QuantConnect.DataSource.OptionsUniverseGenerator.csproj", "{E6851F7A-200C-4A7F-BDB3-AA215EF7E390}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuantConnect", "..\Lean\Common\QuantConnect.csproj", "{6D7C9C9B-F2FB-42D6-BCE7-E088A4814502}"
 EndProject

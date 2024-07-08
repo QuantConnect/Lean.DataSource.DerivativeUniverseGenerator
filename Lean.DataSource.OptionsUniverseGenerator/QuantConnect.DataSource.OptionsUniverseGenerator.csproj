@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<OutputType>Library</OutputType>
+		<OutputType>Exe</OutputType>
 		<TargetFramework>net6.0</TargetFramework>
-		<AssemblyName>Lean.DataSource.DerivativeUniverseGenerator</AssemblyName>
-		<AssemblyTitle>Lean.DataSource.DerivativeUniverseGenerator</AssemblyTitle>
+		<AssemblyName>Lean.DataSource.OptionsUniverseGenerator</AssemblyName>
+		<AssemblyTitle>Lean.DataSource.OptionsUniverseGenerator</AssemblyTitle>
 		<AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-		<Product>Lean.DataSource.DerivativeUniverseGenerator</Product>
+		<Product>Lean.DataSource.OptionsUniverseGenerator</Product>
 		<Copyright>Copyright © 2024</Copyright>
 		<PlatformTarget>AnyCPU</PlatformTarget>
 		<OutputPath>bin\$(Configuration)\</OutputPath>
@@ -40,8 +40,13 @@
 	-->
 
 	<ItemGroup>
+		<ProjectReference Include="..\Lean.DataSource.DerivativeUniverseGenerator\QuantConnect.DataSource.DerivativeUniverseGenerator.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\..\Lean\Common\QuantConnect.csproj" />
 		<ProjectReference Include="..\..\Lean\Configuration\QuantConnect.Configuration.csproj" />
 		<ProjectReference Include="..\..\Lean\Engine\QuantConnect.Lean.Engine.csproj" />
+		<ProjectReference Include="..\..\Lean\Indicators\QuantConnect.Indicators.csproj" />
 	</ItemGroup>
 </Project>

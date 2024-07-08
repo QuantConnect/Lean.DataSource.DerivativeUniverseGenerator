@@ -24,7 +24,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\Lean.DataSource.OptionsUniverseGenerator\Lean.DataSource.OptionsUniverseGenerator.csproj" />
+		<ProjectReference Include="..\Lean.DataSource.OptionsUniverseGenerator\QuantConnect.DataSource.OptionsUniverseGenerator.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
