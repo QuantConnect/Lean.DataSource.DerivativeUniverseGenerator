@@ -1,11 +1,11 @@
 ﻿/*
  * QUANTCONNECT.COM - Democratizing Finance, Empowering Individuals.
  * Lean Algorithmic Trading Engine v2.0. Copyright 2014 QuantConnect Corporation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License"); 
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -97,25 +97,38 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
         private IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
         {
             var tickTypeLower = _symbolsDataTickType.TickTypeToLower();
-            var dateStr = date.ToString(resolution == Resolution.Minute ? "yyyyMMdd" : "yyyy");
 
-            return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"{dateStr}*.zip", SearchOption.AllDirectories)
-                .Where(fileName =>
-                {
-                    var fileInfo = new FileInfo(fileName);
-                    var fileNameParts = fileInfo.Name.Split('_');
+            if (resolution == Resolution.Minute)
+            {
+                var dateStr = date.ToString("yyyyMMdd");
+                var optionStylesLower = new[] { OptionStyle.American, OptionStyle.European }.Select(x => x.OptionStyleToLower()).ToArray();
 
-                    if (resolution == Resolution.Minute)
+                return Directory.EnumerateDirectories(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()))
+                    .SelectMany(directory =>
+                        optionStylesLower.Select(optionStyleLower => Path.Combine(directory, $"{dateStr}_{tickTypeLower}_{optionStyleLower}.zip")))
+                    .Where(fileName => File.Exists(fileName));
+            }
+            else
+            {
+                var dateStr = date.ToString("yyyy");
+                return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"{dateStr}*.zip", SearchOption.AllDirectories)
+                    .Where(fileName =>
                     {
-                        return fileNameParts.Length == 3 &&
-                               fileNameParts[0] == dateStr &&
-                               fileNameParts[1] == tickTypeLower;
-                    }
+                        var fileInfo = new FileInfo(fileName);
+                        var fileNameParts = fileInfo.Name.Split('_');
 
-                    return fileNameParts.Length == 4 &&
-                               fileNameParts[1] == dateStr &&
-                               fileNameParts[2] == tickTypeLower;
-                });
+                        if (resolution == Resolution.Minute)
+                        {
+                            return fileNameParts.Length == 3 &&
+                                   fileNameParts[0] == dateStr &&
+                                   fileNameParts[1] == tickTypeLower;
+                        }
+
+                        return fileNameParts.Length == 4 &&
+                                   fileNameParts[1] == dateStr &&
+                                   fileNameParts[2] == tickTypeLower;
+                    });
+            }
         }
 
         /// <summary>
