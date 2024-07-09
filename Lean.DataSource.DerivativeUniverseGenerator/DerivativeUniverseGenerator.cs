@@ -44,7 +44,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected readonly string _market;
         protected readonly string _dataFolderRoot;
         protected readonly string _outputFolderRoot;
-        protected readonly string _dataSourceFolder;
         protected readonly string _universesOutputFolderRoot;
 
         private readonly IDataProvider _dataProvider;
@@ -77,7 +76,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             _dataFolderRoot = dataFolderRoot;
             _outputFolderRoot = outputFolderRoot;
 
-            _dataSourceFolder = Path.Combine(_dataFolderRoot, _securityType.SecurityTypeToLower(), _market);
             _universesOutputFolderRoot = Path.Combine(_outputFolderRoot, _securityType.SecurityTypeToLower(), _market, "universes");
 
             _dataProvider = Composer.Instance.GetExportedValueByTypeName<IDataProvider>(Config.Get("data-provider", "DefaultDataProvider"));
@@ -109,7 +107,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             try
             {
-                var symbolChainProvider = new ChainSymbolProvider(_dataCacheProvider, _processingDate, _dataSourceFolder);
+                var symbolChainProvider = new ChainSymbolProvider(_dataCacheProvider, _processingDate, _securityType, _market, _dataFolderRoot);
                 var symbols = symbolChainProvider.GetSymbols();
                 Log.Trace($"DerivativeUniverseGenerator.Run(): found {symbols.Count} underlying symbols with {symbols.Sum(x => x.Value.Count)} derivative symbols");
                 return GenerateUniverses(symbols);

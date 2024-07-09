@@ -33,6 +33,7 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
         private readonly IDataCacheProvider _dataCacheProvider;
         protected readonly DateTime _processingDate;
         protected readonly string _dataSourceFolder;
+        protected readonly SecurityType _securityType;
 
         protected TickType _symbolsDataTickType = TickType.Quote;
 
@@ -47,10 +48,12 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
         /// <summary>
         /// Creates a new instance
         /// </summary>
-        public ChainSymbolProvider(IDataCacheProvider dataCacheProvider, DateTime processingDate, string dataSourceFolder)
+        public ChainSymbolProvider(IDataCacheProvider dataCacheProvider, DateTime processingDate, SecurityType securityType, string market,
+            string dataFolderRoot)
         {
             _processingDate = processingDate;
-            _dataSourceFolder = dataSourceFolder;
+            _securityType = securityType;
+            _dataSourceFolder = Path.Combine(dataFolderRoot, securityType.SecurityTypeToLower(), market);
             _dataCacheProvider = dataCacheProvider;
         }
 
@@ -101,11 +104,9 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
             if (resolution == Resolution.Minute)
             {
                 var dateStr = date.ToString("yyyyMMdd");
-                var optionStylesLower = new[] { OptionStyle.American, OptionStyle.European }.Select(x => x.OptionStyleToLower()).ToArray();
-
+                var optionStyleLower = _securityType.DefaultOptionStyle().OptionStyleToLower();
                 return Directory.EnumerateDirectories(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()))
-                    .SelectMany(directory =>
-                        optionStylesLower.Select(optionStyleLower => Path.Combine(directory, $"{dateStr}_{tickTypeLower}_{optionStyleLower}.zip")))
+                    .Select(directory => Path.Combine(directory, $"{dateStr}_{tickTypeLower}_{optionStyleLower}.zip"))
                     .Where(fileName => File.Exists(fileName));
             }
             else
