@@ -37,6 +37,11 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
         /// Convert the entry to a CSV string.
         /// </summary>
         string ToCsv();
+
+        /// <summary>
+        /// Gets the header of the CSV file, which will be added as a comment line at the beginning of the file, prefixed with '#'.
+        /// </summary>
+        string GetHeader();
     }
 
     /// <summary>
@@ -111,6 +116,14 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
         public virtual string ToCsv()
         {
             return $"{Symbol.ID},{Symbol.Value},{Open},{High},{Low},{Close},{Volume}";
+        }
+
+        /// <summary>
+        /// Gets the header of the CSV file
+        /// </summary>
+        public virtual string GetHeader()
+        {
+            return "symbol_id,symbol_value,open,high,low,close,volume";
         }
     }
 }

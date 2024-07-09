@@ -153,5 +153,13 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
 
             public decimal ImpliedVolatility => _delta.ImpliedVolatility;
         }
+
+        /// <summary>
+        /// Gets the header of the CSV file
+        /// </summary>
+        public override string GetHeader()
+        {
+            return OptionUniverse.CsvHeader;
+        }
     }
 }

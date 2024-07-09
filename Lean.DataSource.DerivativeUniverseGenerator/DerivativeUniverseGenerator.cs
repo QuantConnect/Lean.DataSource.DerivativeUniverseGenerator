@@ -154,6 +154,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
                     using var writer = new StreamWriter(universeFileName);
 
+                    // Add the header
+                    var tempEntry = CreateUniverseEntry(canonicalSymbol);
+                    writer.WriteLine($"#{tempEntry.GetHeader()}");
+
                     GenerateUnderlyingLine(underlyingSymbol, underlyingMarketHoursEntry, writer, out var underlyingHistory);
                     GenerateDerivativeLines(canonicalSymbol, contractsSymbols, optionMarketHoursEntry, underlyingHistory, writer);
 
