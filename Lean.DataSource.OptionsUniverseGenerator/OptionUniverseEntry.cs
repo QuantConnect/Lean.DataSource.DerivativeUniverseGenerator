@@ -41,7 +41,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// <summary>
         /// Option contract's greeks on the processing date.
         /// </summary>
-        public Greeks? Greeks => _greeksIndicators?.GetGreeks();
+        public Greeks Greeks => _greeksIndicators?.GetGreeks();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="OptionUniverseEntry"/> class.
@@ -120,19 +120,9 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
 
             public void Update(Slice slice)
             {
-                if (slice.QuoteBars.TryGetValue(_optionSymbol, out var optionQuoteBar))
+                foreach (var data in slice.AllData)
                 {
-                    Update(optionQuoteBar);
-                }
-
-                if (slice.QuoteBars.TryGetValue(_mirrorOptionSymbol, out var mirrorOptionQuoteBar))
-                {
-                    Update(mirrorOptionQuoteBar);
-                }
-
-                if (slice.TryGetValue(_optionSymbol.Underlying, out var underlyingData))
-                {
-                    Update(underlyingData);
+                    Update(data);
                 }
             }
 

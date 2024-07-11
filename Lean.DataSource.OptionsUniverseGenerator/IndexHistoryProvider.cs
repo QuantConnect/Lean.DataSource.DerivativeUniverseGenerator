@@ -35,6 +35,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         private bool _securityTypeLog;
         private bool _resolutionLog;
         private bool _dataTypeLog;
+        private bool _useDailyPreciseEndTime;
         private readonly static string YahooFinanceApiUrl = "https://query1.finance.yahoo.com/v8/finance";
 
         private readonly RestClient _restClient = new(YahooFinanceApiUrl);
@@ -45,6 +46,8 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// <param name="parameters">The initialization parameters</param>
         public override void Initialize(HistoryProviderInitializeParameters parameters)
         {
+            _useDailyPreciseEndTime = parameters.AlgorithmSettings.DailyPreciseEndTime;
+            AlgorithmSettings = parameters.AlgorithmSettings;
         }
 
         /// <summary>
@@ -163,13 +166,20 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             for (int i = 0; i < indexPrices.Timestamps.Count; i++)
             {
                 var time = Time.UnixTimeStampToDateTime(indexPrices.Timestamps[i]);
+                if (!_useDailyPreciseEndTime)
+                {
+                    time = time.Date;
+                }
+                time = time.ConvertTo(dataTimeZone, exchangeTimeZone);
+                var endTime = time.AddDays(1).Date.AddSeconds(-1);
+
                 var open = indexPrices.OpenPrices[i];
                 var high = indexPrices.HighPrices[i];
                 var low = indexPrices.LowPrices[i];
                 var close = indexPrices.ClosePrices[i];
                 var volume = indexPrices.Volumes[i];
 
-                yield return new TradeBar(time.Date.ConvertTo(dataTimeZone, exchangeTimeZone), symbol, open, high, low, close, volume, Time.OneDay);
+                yield return new TradeBar(time.ConvertTo(dataTimeZone, exchangeTimeZone), symbol, open, high, low, close, volume) { EndTime = endTime };
             }
         }
     }
