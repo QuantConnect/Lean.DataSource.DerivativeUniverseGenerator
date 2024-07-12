@@ -31,7 +31,8 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 return symbol;
             }
 
-            return Symbol.CreateOption(symbol.Underlying.Value,
+            return Symbol.CreateOption(symbol.Underlying,
+                symbol.ID.Symbol,
                 symbol.ID.Market,
                 symbol.ID.OptionStyle,
                 symbol.ID.OptionRight == OptionRight.Call ? OptionRight.Put : OptionRight.Call,
