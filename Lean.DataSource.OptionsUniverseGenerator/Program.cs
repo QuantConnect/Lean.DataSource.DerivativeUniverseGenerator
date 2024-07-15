@@ -26,7 +26,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
     ///     "--security-type="          : Option security type to process.
     ///     "--market="                 : Market of data to process.
     /// </param>
-    internal class Program : DerivativeUniverseGenerator.Program
+    public class Program : DerivativeUniverseGenerator.Program
     {
         public static void Main(string[] args)
         {
