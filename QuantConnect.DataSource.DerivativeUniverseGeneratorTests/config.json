@@ -1,0 +1,4 @@
+{
+	"data-folder": "../../../../Lean/Data/",
+	"history-provider": [ "SubscriptionDataReaderHistoryProvider", "IndexHistoryProvider" ]
+}
