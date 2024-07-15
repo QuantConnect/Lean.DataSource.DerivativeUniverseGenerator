@@ -24,6 +24,8 @@ using QuantConnect.Data.Market;
 using System.Collections.Generic;
 using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Lean.Engine.HistoricalData;
+using QuantConnect.Util;
+using QuantConnect.Securities;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -149,7 +151,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                         Thread.Sleep(Time.OneSecond);
                         continue;
                     }
-                    return ParseHistory(request.Symbol, indexPrices, request.ExchangeHours.TimeZone, request.DataTimeZone);
+                    return ParseHistory(request.Symbol, indexPrices, request.ExchangeHours, request.DataTimeZone);
                 }
                 catch (Exception exception)
                 {
@@ -161,17 +163,21 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             return null;
         }
 
-        private IEnumerable<BaseData> ParseHistory(Symbol symbol, YahooFinanceIndexPrices indexPrices, DateTimeZone exchangeTimeZone, DateTimeZone dataTimeZone)
+        private IEnumerable<BaseData> ParseHistory(Symbol symbol, YahooFinanceIndexPrices indexPrices, SecurityExchangeHours exchange, DateTimeZone dataTimeZone)
         {
             for (int i = 0; i < indexPrices.Timestamps.Count; i++)
             {
-                var time = Time.UnixTimeStampToDateTime(indexPrices.Timestamps[i]);
+                var time = Time.UnixTimeStampToDateTime(indexPrices.Timestamps[i]).ConvertTo(dataTimeZone, exchange.TimeZone);
+                var endTime = DateTime.MaxValue;
                 if (!_useDailyPreciseEndTime)
                 {
                     time = time.Date;
+                    endTime = time.AddDays(1);
                 }
-                time = time.ConvertTo(dataTimeZone, exchangeTimeZone);
-                var endTime = time.AddDays(1).Date.AddSeconds(-1);
+                else
+                {
+                    endTime = LeanData.GetNextDailyEndTime(symbol, time, exchange);
+                }
 
                 var open = indexPrices.OpenPrices[i];
                 var high = indexPrices.HighPrices[i];
@@ -179,7 +185,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 var close = indexPrices.ClosePrices[i];
                 var volume = indexPrices.Volumes[i];
 
-                yield return new TradeBar(time.ConvertTo(dataTimeZone, exchangeTimeZone), symbol, open, high, low, close, volume) { EndTime = endTime };
+                yield return new TradeBar(time.ConvertTo(dataTimeZone, exchange.TimeZone), symbol, open, high, low, close, volume) { EndTime = endTime };
             }
         }
     }

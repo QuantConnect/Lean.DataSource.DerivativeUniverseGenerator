@@ -22,8 +22,6 @@ using QuantConnect.Util;
 using System;
 using System.Linq;
 using QuantConnect.DataSource.OptionsUniverseGenerator;
-using QuantConnect.Interfaces;
-using QuantConnect.Lean.Engine.DataFeeds;
 
 namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
 {
@@ -36,7 +34,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
         public void GetsDailyHistory(string ticker)
         {
             var historyProvider = new IndexHistoryProvider();
-            historyProvider.Initialize(null);
+            historyProvider.Initialize(new HistoryProviderInitializeParameters(null, null, null, null, null, null, (_) => { }, true, null, null,
+                new AlgorithmSettings() { DailyPreciseEndTime = true}));
 
             var symbol = Symbol.Create(ticker, SecurityType.Index, Market.USA);
             var marketHoursEntry = MarketHoursDatabase.FromDataFolder().GetEntry(symbol.ID.Market, symbol, symbol.SecurityType);

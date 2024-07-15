@@ -61,18 +61,21 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// <summary>
         /// Updates the option contract's prices, open interest, implied volatility and greeks with the provided data.
         /// </summary>
-        public override void Update(Slice data)
+        public override void Update(Slice slice)
         {
-            base.Update(data);
+            base.Update(slice);
 
             if (Symbol.SecurityType.IsOption())
             {
-                if (data.TryGet<OpenInterest>(Symbol, out var openInterest))
+                if (slice.TryGet<OpenInterest>(Symbol, out var openInterest))
                 {
                     OpenInterest = openInterest.Value;
                 }
 
-                _greeksIndicators.Update(data);
+                foreach (var data in slice.AllData)
+                {
+                    _greeksIndicators.Update(data);
+                }
             }
         }
 
@@ -118,15 +121,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 _rho = new Rho(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
             }
 
-            public void Update(Slice slice)
-            {
-                foreach (var data in slice.AllData)
-                {
-                    Update(data);
-                }
-            }
-
-            private void Update(IBaseData data)
+            public void Update(IBaseData data)
             {
                 var point = new IndicatorDataPoint(data.Symbol, data.EndTime, data.Price);
                 _delta.Update(point);
