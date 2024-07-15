@@ -22,6 +22,7 @@ using QuantConnect.Util;
 using System;
 using System.Linq;
 using QuantConnect.DataSource.OptionsUniverseGenerator;
+using Fasterflect;
 
 namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
 {
@@ -57,6 +58,45 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
             var history = historyProvider.GetHistory(new[] { request }, marketHoursEntry.ExchangeHours.TimeZone).ToList();
 
             Assert.That(history, Is.Not.Null.Or.Empty);
+        }
+
+        [Test]
+        public void RespectsDailyStrictEndTime([Values] bool dailyPreciseEndTime)
+        {
+            var historyProvider = new IndexHistoryProvider();
+            historyProvider.Initialize(new HistoryProviderInitializeParameters(null, null, null, null, null, null, (_) => { }, true, null, null,
+                new AlgorithmSettings() { DailyPreciseEndTime = dailyPreciseEndTime }));
+
+            var symbol = Symbol.Create("SPX", SecurityType.Index, Market.USA);
+            var marketHoursEntry = MarketHoursDatabase.FromDataFolder().GetEntry(symbol.ID.Market, symbol, symbol.SecurityType);
+
+            var startDate = new DateTime(2024, 01, 08);
+
+            var request = new HistoryRequest(
+                startDate,
+                startDate.AddMonths(1),
+                typeof(TradeBar),
+                symbol,
+                Resolution.Daily,
+                marketHoursEntry.ExchangeHours,
+                marketHoursEntry.DataTimeZone,
+                Resolution.Daily,
+                true,
+                false,
+                DataNormalizationMode.Adjusted,
+                TickType.Trade);
+
+            var history = historyProvider.GetHistory(new[] { request }, marketHoursEntry.ExchangeHours.TimeZone).ToList();
+            Assert.That(history, Is.Not.Null.Or.Empty);
+
+            Assert.That(history, Is.Not.Null.Or.Empty.And.Matches<Slice>(slice =>
+            {
+                var tradeBar = slice.Bars.Values.Single();
+                var expectedStart = dailyPreciseEndTime ? marketHoursEntry.ExchangeHours.GetNextMarketOpen(startDate.Date, true) : startDate.Date;
+                var expectedEnd = dailyPreciseEndTime ? marketHoursEntry.ExchangeHours.GetNextMarketClose(expectedStart, true) : startDate.Date.AddDays(1);
+
+                return tradeBar.Time == expectedStart && tradeBar.EndTime == expectedEnd;
+            }));
         }
     }
 }

@@ -151,7 +151,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                         Thread.Sleep(Time.OneSecond);
                         continue;
                     }
-                    return ParseHistory(request.Symbol, indexPrices, request.ExchangeHours, request.DataTimeZone);
+                    return ParseHistory(request.Symbol, indexPrices, request.ExchangeHours);
                 }
                 catch (Exception exception)
                 {
@@ -163,11 +163,11 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             return null;
         }
 
-        private IEnumerable<BaseData> ParseHistory(Symbol symbol, YahooFinanceIndexPrices indexPrices, SecurityExchangeHours exchange, DateTimeZone dataTimeZone)
+        private IEnumerable<BaseData> ParseHistory(Symbol symbol, YahooFinanceIndexPrices indexPrices, SecurityExchangeHours exchange)
         {
             for (int i = 0; i < indexPrices.Timestamps.Count; i++)
             {
-                var time = Time.UnixTimeStampToDateTime(indexPrices.Timestamps[i]).ConvertTo(dataTimeZone, exchange.TimeZone);
+                var time = Time.UnixTimeStampToDateTime(indexPrices.Timestamps[i]).ConvertFromUtc(exchange.TimeZone);
                 var endTime = DateTime.MaxValue;
                 if (!_useDailyPreciseEndTime)
                 {
@@ -185,7 +185,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 var close = indexPrices.ClosePrices[i];
                 var volume = indexPrices.Volumes[i];
 
-                yield return new TradeBar(time.ConvertTo(dataTimeZone, exchange.TimeZone), symbol, open, high, low, close, volume) { EndTime = endTime };
+                yield return new TradeBar(time, symbol, open, high, low, close, volume) { EndTime = endTime };
             }
         }
     }
