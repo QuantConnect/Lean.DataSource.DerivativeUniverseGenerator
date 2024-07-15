@@ -17,6 +17,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuantConnect.Indicators", "
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuantConnect.DataSource.DerivativeUniverseGeneratorTests", "QuantConnect.DataSource.DerivativeUniverseGeneratorTests\QuantConnect.DataSource.DerivativeUniverseGeneratorTests.csproj", "{83A80ED1-DE7F-41D4-A9D2-612F24BF0D16}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DataProcessing", "DataProcessing\DataProcessing.csproj", "{8688840C-3170-4D88-A821-6BD1AB643B82}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -51,6 +53,10 @@ Global
 		{83A80ED1-DE7F-41D4-A9D2-612F24BF0D16}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{83A80ED1-DE7F-41D4-A9D2-612F24BF0D16}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{83A80ED1-DE7F-41D4-A9D2-612F24BF0D16}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8688840C-3170-4D88-A821-6BD1AB643B82}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8688840C-3170-4D88-A821-6BD1AB643B82}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8688840C-3170-4D88-A821-6BD1AB643B82}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8688840C-3170-4D88-A821-6BD1AB643B82}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
