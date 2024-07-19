@@ -112,18 +112,11 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
             else
             {
                 var dateStr = date.ToString("yyyy");
-                return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"{dateStr}*.zip", SearchOption.AllDirectories)
+                return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"*{dateStr}*.zip", SearchOption.AllDirectories)
                     .Where(fileName =>
                     {
                         var fileInfo = new FileInfo(fileName);
                         var fileNameParts = fileInfo.Name.Split('_');
-
-                        if (resolution == Resolution.Minute)
-                        {
-                            return fileNameParts.Length == 3 &&
-                                   fileNameParts[0] == dateStr &&
-                                   fileNameParts[1] == tickTypeLower;
-                        }
 
                         return fileNameParts.Length == 4 &&
                                    fileNameParts[1] == dateStr &&
