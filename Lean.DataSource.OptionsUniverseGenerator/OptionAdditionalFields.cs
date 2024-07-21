@@ -25,6 +25,12 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
     public class OptionAdditionalFields : DerivativeUniverseGenerator.IAdditionalFields
     {
         /// <summary>
+        /// Expected 30 Days Implied Volatility
+        /// </summary>
+        /// <remarks>Linearly interpolated by bracket method</remarks>
+        public decimal? Iv30 { get; set; } = null;
+
+        /// <summary>
         /// Implied Volatility Rank
         /// </summary>
         /// <remarks>The relative volatility over the past year</remarks>
@@ -42,6 +48,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// <param name="ivs">List of past year's ATM implied volatilities</param>
         public void Update(List<decimal> ivs)
         {
+            Iv30 = ivs[^1];
             IvRank = CalculateIvRank(ivs);
             IvPercentile = CalculateIvPercentile(ivs);
         }
@@ -51,7 +58,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         public string GetHeader()
         {
-            return "iv_rank,iv_percentile";
+            return "iv_30,iv_rank,iv_percentile";
         }
 
         /// <summary>
@@ -59,7 +66,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         public string ToCsv()
         {
-            return $"{WriteNullableField(IvRank)},{WriteNullableField(IvPercentile)}";
+            return $"{WriteNullableField(Iv30)},{WriteNullableField(IvRank)},{WriteNullableField(IvPercentile)}";
         }
 
         // source: https://www.tastylive.com/concepts-strategies/implied-volatility-rank-percentile

@@ -99,6 +99,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 return -1m;
             }
 
+            // Skip underlying row
             var filtered = lines.Skip(2)
                 .Select(line =>
                 {
@@ -108,18 +109,33 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                     var iv = decimal.Parse(values[ivIndex]);
                     return (Expiry: symbol.ID.Date, Delta: delta, ImpliedVolatility: iv);
                 })
-                .Where(x => x.Expiry >= currentDateTime.AddDays(30))
+                .Where(x => x.ImpliedVolatility != 0m)
                 .ToList();
             if (filtered.Count == 0)
             {
                 return -1m;
             }
 
-            // Skip underlying row
-            return filtered.OrderBy(x => x.Expiry)
-                .ThenBy(x => Math.Abs(x.Delta - 0.5m))
+            var expiries = filtered.Select(x => x.Expiry).ToList().Distinct();
+            var day30 = currentDateTime.AddDays(30);
+            var nearExpiry = expiries.Where(x => x <= day30).Max();
+            var farExpiry = expiries.Where(x => x >= day30).Min();
+            
+            var nearIv = filtered.Where(x => x.Expiry == nearExpiry)
+                .OrderBy(x => Math.Abs(x.Delta - 0.5m))
                 .First()
                 .ImpliedVolatility;
+            if (nearExpiry == farExpiry)
+            {
+                return nearIv;
+            }
+            var farIv = filtered.Where(x => x.Expiry == farExpiry)
+                .OrderBy(x => Math.Abs(x.Delta - 0.5m))
+                .First()
+                .ImpliedVolatility;
+            // Linear interpolation
+            return (nearIv * Convert.ToDecimal((farExpiry - day30).TotalDays) + farIv * Convert.ToDecimal((day30 - nearExpiry).TotalDays))
+                / Convert.ToDecimal((farExpiry - nearExpiry).TotalDays);
         }
     }
 }
