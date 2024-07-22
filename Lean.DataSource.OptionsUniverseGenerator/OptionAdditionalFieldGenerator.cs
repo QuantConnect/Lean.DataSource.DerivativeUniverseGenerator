@@ -28,6 +28,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         private const string _deltaHeader = "delta";
         private const string _sidHeader = "#symbol_id";
         private const string _tickerHeader = "symbol_value";
+        private Dictionary<string, Dictionary<DateTime, decimal>> _iv30s = new();
 
         public OptionAdditionalFieldGenerator(DateTime processingDate, string rootPath)
             : base(processingDate, rootPath)
@@ -43,6 +44,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             {
                 foreach (var subFolder in Directory.GetDirectories(_rootPath))
                 {
+                    _iv30s[subFolder] = new();
                     var dateFile = Path.Combine(subFolder, $"{_processingDate:yyyyMMdd}.csv");
                     var symbol = subFolder.Split(Path.DirectorySeparatorChar)[^1].ToUpper();
                     if (!File.Exists(dateFile))
@@ -72,14 +74,22 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             // get i-year ATM IVs to calculate IV rank and percentile
             var lastYearFiles = Directory.EnumerateFiles(path, "*.csv")
                 .AsParallel()
-                .Where(file => DateTime.TryParseExact(Path.GetFileNameWithoutExtension(file), "yyyyMMdd", 
+                .Where(file => DateTime.TryParseExact(Path.GetFileNameWithoutExtension(file), "yyyyMMdd",
                         CultureInfo.InvariantCulture, DateTimeStyles.None, out var fileDate)
                     && fileDate > currentDateTime.AddYears(-1)
-                    && fileDate <= currentDateTime)
-                .OrderBy(file => file)
-                .ToList();
+                    && fileDate <= currentDateTime
+                    && !_iv30s[path].ContainsKey(fileDate))
+                .ToDictionary(
+                    file => DateTime.ParseExact(Path.GetFileNameWithoutExtension(file), "yyyyMMdd",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None),
+                    file => GetAtmIv(file)
+                );
+            _iv30s[path] = _iv30s[path].Concat(lastYearFiles)
+                .ToDictionary(x => x.Key, x => x.Value);
 
-            return lastYearFiles.Select(csvFile => GetAtmIv(csvFile))
+            return _iv30s[path].Where(x => x.Key > currentDateTime.AddYears(-1) && x.Key <= currentDateTime)
+                .OrderBy(x => x.Key)
+                .Select(x => x.Value)
                 .ToList();
         }
 
