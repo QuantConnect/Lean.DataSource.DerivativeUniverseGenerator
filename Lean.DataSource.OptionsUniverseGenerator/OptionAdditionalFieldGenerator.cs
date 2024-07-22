@@ -79,11 +79,11 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 .OrderBy(file => file)
                 .ToList();
 
-            return lastYearFiles.Select(csvFile => GetAtmIv(currentDateTime, csvFile))
+            return lastYearFiles.Select(csvFile => GetAtmIv(csvFile))
                 .ToList();
         }
 
-        private decimal GetAtmIv(DateTime currentDateTime, string csvPath)
+        private decimal GetAtmIv(string csvPath)
         {
             var lines = File.ReadAllLines(csvPath)
                 .Where(s => !string.IsNullOrWhiteSpace(s))
@@ -117,6 +117,8 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             }
 
             var expiries = filtered.Select(x => x.Expiry).ToList().Distinct();
+            var currentDateTime = DateTime.ParseExact(Path.GetFileNameWithoutExtension(csvPath), "yyyyMMdd", 
+                CultureInfo.InvariantCulture, DateTimeStyles.None);
             var day30 = currentDateTime.AddDays(30);
             var nearExpiry = expiries.Where(x => x <= day30).Max();
             var farExpiry = expiries.Where(x => x >= day30).Min();
