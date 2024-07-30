@@ -18,6 +18,7 @@ using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Data.UniverseSelection;
 using QuantConnect.Indicators;
+using System.Linq;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -71,8 +72,11 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 {
                     OpenInterest = openInterest.Value;
                 }
+            }
 
-                foreach (var data in slice.AllData)
+            if (_greeksIndicators != null)
+            {
+                foreach (var data in slice.AllData.OfType<IBaseDataBar>())
                 {
                     _greeksIndicators.Update(data);
                 }
@@ -114,21 +118,36 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
 
                 var dividendYieldModel = DividendYieldProvider.CreateForOption(_optionSymbol);
 
-                _delta = new Delta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _gamma = new Gamma(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _vega = new Vega(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _theta = new Theta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _rho = new Rho(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
+                _delta = new Delta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol,
+                    optionModel: OptionPricingModelType.ForwardTree, ivModel: OptionPricingModelType.ForwardTree);
+                _gamma = new Gamma(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol,
+                    optionModel: OptionPricingModelType.ForwardTree, ivModel: OptionPricingModelType.ForwardTree);
+                _vega = new Vega(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol,
+                    optionModel: OptionPricingModelType.ForwardTree, ivModel: OptionPricingModelType.ForwardTree);
+                _theta = new Theta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol,
+                    optionModel: OptionPricingModelType.ForwardTree, ivModel: OptionPricingModelType.ForwardTree);
+                _rho = new Rho(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol,
+                    optionModel: OptionPricingModelType.ForwardTree, ivModel: OptionPricingModelType.ForwardTree);
             }
 
-            public void Update(IBaseData data)
+            public void Update(IBaseDataBar data)
             {
-                var point = new IndicatorDataPoint(data.Symbol, data.EndTime, data.Price);
-                _delta.Update(point);
-                _gamma.Update(point);
-                _vega.Update(point);
-                _theta.Update(point);
-                _rho.Update(point);
+                var point = new IndicatorDataPoint(data.Symbol, data.EndTime, data.Close);
+
+                UpdateIndicator(_delta, point);
+                UpdateIndicator(_gamma, point);
+                UpdateIndicator(_vega, point);
+                UpdateIndicator(_theta, point);
+                UpdateIndicator(_rho, point);
+            }
+
+            public void UpdateIndicator(OptionGreeksIndicatorBase indicator, IndicatorDataPoint point)
+            {
+                try
+                {
+                    indicator.Update(point);
+                }
+                catch { }
             }
 
             public Greeks GetGreeks()
