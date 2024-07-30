@@ -21,6 +21,7 @@ using QuantConnect;
 using QuantConnect.Util;
 using QuantConnect.Interfaces;
 using System.Collections.Generic;
+using QuantConnect.Configuration;
 
 namespace Lean.DataSource.DerivativeUniverseGenerator
 {
