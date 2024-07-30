@@ -21,7 +21,6 @@ using QuantConnect;
 using QuantConnect.Util;
 using QuantConnect.Interfaces;
 using System.Collections.Generic;
-using QuantConnect.Configuration;
 
 namespace Lean.DataSource.DerivativeUniverseGenerator
 {
@@ -112,7 +111,7 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
             else
             {
                 var dateStr = date.ToString("yyyy");
-                return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"{dateStr}*.zip", SearchOption.AllDirectories)
+                return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"*{dateStr}*.zip", SearchOption.AllDirectories)
                     .Where(fileName =>
                     {
                         var fileInfo = new FileInfo(fileName);
