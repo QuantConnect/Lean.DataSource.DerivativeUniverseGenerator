@@ -118,21 +118,16 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 _optionSymbol = optionSymbol;
                 _mirrorOptionSymbol = mirrorOptionSymbol;
 
-                var dividendYieldModel = DividendYieldProvider.CreateForOption(_optionSymbol);
+                IDividendYieldModel dividendYieldModel = optionSymbol.SecurityType != SecurityType.IndexOption
+                    ? DividendYieldProvider.CreateForOption(_optionSymbol)
+                    : new ConstantDividendYieldModel(0);
 
-                _iv = new ImpliedVolatility(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol,
-                    optionModel: OptionPricingModelType.ForwardTree);
-
-                _delta = new Delta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol,
-                    optionModel: OptionPricingModelType.ForwardTree);
-                _gamma = new Gamma(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol,
-                    optionModel: OptionPricingModelType.ForwardTree);
-                _vega = new Vega(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol,
-                    optionModel: OptionPricingModelType.ForwardTree);
-                _theta = new Theta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol,
-                    optionModel: OptionPricingModelType.ForwardTree);
-                _rho = new Rho(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol,
-                    optionModel: OptionPricingModelType.ForwardTree);
+                _iv = new ImpliedVolatility(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
+                _delta = new Delta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
+                _gamma = new Gamma(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
+                _vega = new Vega(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
+                _theta = new Theta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
+                _rho = new Rho(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
 
                 _delta.ImpliedVolatility = _iv;
                 _gamma.ImpliedVolatility = _iv;
