@@ -18,7 +18,6 @@ using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Data.UniverseSelection;
 using QuantConnect.Indicators;
-using System.Linq;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -64,21 +63,38 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         public override void Update(Slice slice)
         {
-            base.Update(slice);
-
-            if (Symbol.SecurityType.IsOption())
+            if (!Symbol.SecurityType.IsOption())
+            {
+                base.Update(slice);
+            }
+            else
             {
                 if (slice.TryGet<OpenInterest>(Symbol, out var openInterest))
                 {
                     OpenInterest = openInterest.Value;
                 }
-            }
 
-            if (_greeksIndicators != null)
-            {
-                foreach (var data in slice.AllData.OfType<IBaseDataBar>())
+                if (slice.Bars.TryGetValue(Symbol, out var tradeBar))
                 {
-                    _greeksIndicators.Update(data);
+                    Volume = tradeBar.Volume;
+                }
+
+                if (slice.QuoteBars.TryGetValue(Symbol, out var quoteBar))
+                {
+                    Open = quoteBar.Open;
+                    High = quoteBar.High;
+                    Low = quoteBar.Low;
+                    Close = quoteBar.Close;
+                }
+
+                if (slice.Bars.TryGetValue(Symbol.Underlying, out var underlyingTrade))
+                {
+                    _greeksIndicators.Update(underlyingTrade);
+                }
+
+                foreach (var quote in slice.QuoteBars.Values)
+                {
+                    _greeksIndicators.Update(quote);
                 }
             }
         }
