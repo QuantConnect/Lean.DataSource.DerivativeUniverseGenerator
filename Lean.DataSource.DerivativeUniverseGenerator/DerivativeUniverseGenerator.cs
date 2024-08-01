@@ -129,6 +129,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         {
             var cancellationTokenSource = new CancellationTokenSource();
             var symbolCounter = 0;
+            var totalContracts = symbols.Sum(x => x.Value.Count);
             var start = DateTime.UtcNow;
             Parallel.ForEach(symbols, new ParallelOptions { MaxDegreeOfParallelism = (int)(Environment.ProcessorCount * 1.5m), CancellationToken = cancellationTokenSource.Token }, kvp =>
             {
@@ -162,11 +163,11 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     GenerateUnderlyingLine(underlyingSymbol, underlyingMarketHoursEntry, writer, out var underlyingHistory);
                     GenerateDerivativeLines(canonicalSymbol, contractsSymbols, optionMarketHoursEntry, underlyingHistory, writer);
 
-                    var currentCounter = Interlocked.Increment(ref symbolCounter);
+                    var currentCounter = Interlocked.Add(ref symbolCounter, contractsSymbols.Count);
                     if (currentCounter % 10 == 0)
                     {
                         var took = DateTime.UtcNow - start;
-                        var eta = (symbols.Count * took) / currentCounter;
+                        var eta = (totalContracts - currentCounter) * took / currentCounter;
                         Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): finished processing {currentCounter} symbols. Took: {took}. ETA: {eta}");
                     }
                 }
