@@ -15,7 +15,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using QuantConnect.Indicators;
 using QuantConnect.Data.Market;
 using Accord.Statistics.Models.Regression.Linear;
@@ -23,28 +22,39 @@ using MathNet.Numerics.RootFinding;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
-    public class IvInterpolation
+    internal class IvInterpolation
     {
         private decimal _underlyingPrice;
-        private DateTime _currentDate;
+        private DateTime _referenceDate;
         private MultipleLinearRegression _model;
 
-        public IvInterpolation(decimal underlyingPrice, DateTime currentDate, IEnumerable<(Symbol Symbol, decimal ImpliedVolatility)> data)
+        public IvInterpolation(DateTime referenceDate, List<OptionUniverseEntry> entries, decimal underlyingPrice, int numberOfEntriesWithValidIv)
         {
-            _underlyingPrice = underlyingPrice;
-            _currentDate = currentDate;
-
-            var inputs = data.Select(x => GetInput(x.Symbol.ID.StrikePrice, x.Symbol.ID.Date, x.ImpliedVolatility)).ToArray();
-            var outputs = data.Select(x => (double)x.ImpliedVolatility).ToArray();
-
-            var ols = new OrdinaryLeastSquares()
+            if (entries.Count <= numberOfEntriesWithValidIv)
             {
-                UseIntercept = true
-            };
-            _model = ols.Learn(inputs, outputs);
+                throw new ArgumentException("The number of entries with valid implied volatility must be less than the total number of entries.");
+            }
+
+            _underlyingPrice = underlyingPrice;
+            _referenceDate = referenceDate;
+
+            var modelInputs = new double[numberOfEntriesWithValidIv][];
+            var modelOutputs = new double[numberOfEntriesWithValidIv];
+
+            for (int i = 0, j = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                var iv = entry.ImpliedVolatility ?? 0;
+                if (iv == 0) continue;
+                modelInputs[j] = GetModelInput(entry.Symbol.ID.StrikePrice, entry.Symbol.ID.Date, iv);
+                modelOutputs[j++] = (double)iv;
+            }
+
+            var ols = new OrdinaryLeastSquares() { UseIntercept = true };
+            _model = ols.Learn(modelInputs, modelOutputs);
         }
 
-        private double[] GetInput(decimal strike, DateTime expiry, decimal iv)
+        private double[] GetModelInput(decimal strike, DateTime expiry, decimal iv)
         {
             var moneyness = GetMoneyness(strike, expiry, iv);
             var ttm = GetTimeTillMaturity(expiry);
@@ -66,36 +76,36 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
 
         private double GetTimeTillMaturity(DateTime expiry)
         {
-            return (expiry - _currentDate).TotalDays / 365d;
+            return (expiry - _referenceDate).TotalDays / 365d;
         }
 
         public decimal GetInterpolatedIv(decimal strike, DateTime expiry)
         {
             Func<double, double> f = (vol) =>
             {
-                var input = GetInput(strike, expiry, Convert.ToDecimal(vol));
+                var input = GetModelInput(strike, expiry, Convert.ToDecimal(vol));
                 var iv = _model.Transform(input);
                 return vol - iv;
             };
             return Convert.ToDecimal(Brent.FindRoot(f, 1e-7d, 4.0d, 1e-4d, 100));
         }
 
-        public Greeks GetUpdatedGreeks(Symbol option, decimal polatedIv, OptionPricingModelType? optionModel = null, OptionPricingModelType? ivModel = null)
+        public GreeksIndicators GetUpdatedGreeksIndicators(Symbol option, decimal interpolatedIv, OptionPricingModelType? optionModel = null,
+            OptionPricingModelType? ivModel = null)
         {
-            var greeks = new OptionUniverseEntry.GreeksIndicators(option, null, optionModel, ivModel);
+            var greeksIndicators = new GreeksIndicators(option, null, optionModel, ivModel);
+            var timeToExpiration = Convert.ToDecimal((option.ID.Date - _referenceDate).TotalDays / 365d);
+            var interest = greeksIndicators.InterestRate;
+            var dividend = greeksIndicators.DividendYield;
 
-            var ttm = Convert.ToDecimal((option.ID.Date - _currentDate).TotalDays / 365d);
-            var interest = greeks.InterestRate;
-            var dividend = greeks.DividendYield;
-            
             // Use BSM for speed
-            var optionPrice = OptionGreekIndicatorsHelper.BlackTheoreticalPrice(polatedIv, _underlyingPrice, option.ID.StrikePrice, ttm,
+            var optionPrice = OptionGreekIndicatorsHelper.BlackTheoreticalPrice(interpolatedIv, _underlyingPrice, option.ID.StrikePrice, timeToExpiration,
                 interest, dividend, option.ID.OptionRight);
 
-            greeks.Update(new TradeBar { Symbol = option.Underlying, EndTime = _currentDate, Close = _underlyingPrice });
-            greeks.Update(new TradeBar { Symbol = option, EndTime = _currentDate, Close = optionPrice });
+            greeksIndicators.Update(new TradeBar { Symbol = option.Underlying, EndTime = _referenceDate, Close = _underlyingPrice });
+            greeksIndicators.Update(new TradeBar { Symbol = option, EndTime = _referenceDate, Close = optionPrice });
 
-            return greeks.GetGreeks();
+            return greeksIndicators;
         }
     }
 }

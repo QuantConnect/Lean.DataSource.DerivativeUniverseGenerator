@@ -20,6 +20,8 @@ using QuantConnect.Data;
 using QuantConnect.Util;
 using QuantConnect.Securities;
 using Lean.DataSource.DerivativeUniverseGenerator;
+using System.Collections.Generic;
+using QuantConnect.Logging;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -81,6 +83,47 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             var mirrorOptionHistoryRequests = base.GetDerivativeHistoryRequests(mirrorOptionSymbol, start, end, marketHoursEntry);
 
             return requests.Concat(mirrorOptionHistoryRequests).ToArray();
+        }
+
+        /// <summary>
+        /// Generates and the derivative universe entries for the specified canonical symbol.
+        /// </summary>
+        protected override IEnumerable<IDerivativeUniverseFileEntry> GenerateDerivativeEntries(Symbol canonicalSymbol, List<Symbol> symbols,
+            MarketHoursDatabase.Entry marketHoursEntry, List<Slice> underlyingHistory, IDerivativeUniverseFileEntry underlyingEntry)
+        {
+            var entries = new List<OptionUniverseEntry>();
+            var entriesWithMissingIv = new List<OptionUniverseEntry>();
+            foreach (OptionUniverseEntry entry in base.GenerateDerivativeEntries(canonicalSymbol, symbols, marketHoursEntry, underlyingHistory, underlyingEntry))
+            {
+                entries.Add(entry);
+                if (!entry.ImpliedVolatility.HasValue || entry.ImpliedVolatility == 0)
+                {
+                    entriesWithMissingIv.Add(entry);
+                }
+            }
+
+            if (entriesWithMissingIv.Count > 0)
+            {
+                // Interpolate missing IVs and re-generate greeks
+                var ivInterpolator = new IvInterpolation(_processingDate, entries, (underlyingEntry as OptionUniverseEntry).Close,
+                    entries.Count - entriesWithMissingIv.Count);
+                foreach (var entry in entriesWithMissingIv)
+                {
+                    var interpolatedIv = 0m;
+                    try
+                    {
+                        interpolatedIv = ivInterpolator.GetInterpolatedIv(entry.Symbol.ID.StrikePrice, entry.Symbol.ID.Date);
+                    }
+                    catch (Exception e)
+                    {
+                        Log.Error(e, $"Error interpolating IVs for {canonicalSymbol}. ");
+                    }
+                    var updatedGreeks = ivInterpolator.GetUpdatedGreeksIndicators(entry.Symbol, interpolatedIv);
+                    entry.SetGreeksIndicators(updatedGreeks);
+                }
+            }
+
+            return entries;
         }
     }
 }
