@@ -41,6 +41,10 @@
 	-->
 
 	<ItemGroup>
+		<PackageReference Include="MathNet.Numerics" Version="5.0.*" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\Lean.DataSource.DerivativeUniverseGenerator\QuantConnect.DataSource.DerivativeUniverseGenerator.csproj" />
 	</ItemGroup>
 
