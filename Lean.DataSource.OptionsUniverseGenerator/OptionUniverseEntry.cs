@@ -114,7 +114,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// <summary>
         /// Helper class that holds and updates the greeks indicators
         /// </summary>
-        private class GreeksIndicators
+        public class GreeksIndicators
         {
             private readonly static IRiskFreeInterestRateModel _interestRateProvider = new InterestRateProvider();
 
@@ -129,7 +129,8 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             private readonly Theta _theta;
             private readonly Rho _rho;
 
-            public GreeksIndicators(Symbol optionSymbol, Symbol mirrorOptionSymbol)
+            public GreeksIndicators(Symbol optionSymbol, Symbol mirrorOptionSymbol, OptionPricingModelType? optionModel = null,
+                OptionPricingModelType? ivModel = null)
             {
                 _optionSymbol = optionSymbol;
                 _mirrorOptionSymbol = mirrorOptionSymbol;
@@ -138,12 +139,12 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                     ? DividendYieldProvider.CreateForOption(_optionSymbol)
                     : new ConstantDividendYieldModel(0);
 
-                _iv = new ImpliedVolatility(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _delta = new Delta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _gamma = new Gamma(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _vega = new Vega(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _theta = new Theta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _rho = new Rho(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
+                _iv = new ImpliedVolatility(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol, ivModel);
+                _delta = new Delta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol, optionModel, ivModel);
+                _gamma = new Gamma(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol, optionModel, ivModel);
+                _vega = new Vega(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol, optionModel, ivModel);
+                _theta = new Theta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol, optionModel, ivModel);
+                _rho = new Rho(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol, optionModel, ivModel);
 
                 _delta.ImpliedVolatility = _iv;
                 _gamma.ImpliedVolatility = _iv;
@@ -170,6 +171,10 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             }
 
             public decimal ImpliedVolatility => _delta.ImpliedVolatility;
+
+            public decimal InterestRate => _delta.RiskFreeRate;
+
+            public decimal DividendYield => _delta.DividendYield;
         }
 
         /// <summary>

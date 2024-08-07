@@ -92,8 +92,8 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             var optionPrice = OptionGreekIndicatorsHelper.BlackTheoreticalPrice(polatedIv, _underlyingPrice, option.ID.StrikePrice, ttm,
                 interest, dividend, option.ID.OptionRight);
 
-            greeks.Update(new IndicatorDataPoint(option.Underlying, _currentDate, _underlyingPrice));
-            greeks.Update(new IndicatorDataPoint(option, _currentDate, optionPrice));
+            greeks.Update(new TradeBar { Symbol = option.Underlying, EndTime = _currentDate, Close = _underlyingPrice });
+            greeks.Update(new TradeBar { Symbol = option, EndTime = _currentDate, Close = optionPrice });
 
             return greeks.GetGreeks();
         }
