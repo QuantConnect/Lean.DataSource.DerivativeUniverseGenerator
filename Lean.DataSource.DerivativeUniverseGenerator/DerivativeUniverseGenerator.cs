@@ -57,7 +57,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// </summary>
         protected virtual Resolution[] PriceHistoryResolutions { get; } = new[] { Resolution.Daily };
 
-        private readonly int _historyBarCount = 5;
+        private readonly int _historyBarCount = 1;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DerivativeUniverseGenerator" /> class.
