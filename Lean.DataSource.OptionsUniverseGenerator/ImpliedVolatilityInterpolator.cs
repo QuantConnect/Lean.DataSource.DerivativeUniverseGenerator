@@ -19,16 +19,13 @@ using QuantConnect.Indicators;
 using QuantConnect.Data.Market;
 using Accord.Statistics.Models.Regression.Linear;
 using MathNet.Numerics.RootFinding;
-using System.Runtime.CompilerServices;
-using Accord.Math;
-using System.Linq;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
     /// <summary>
     /// Interpolates implied volatility for options with missing values
     /// </summary>
-    internal class ImpliedVolatilityInterpolator
+    public class ImpliedVolatilityInterpolator
     {
         private decimal _underlyingPrice;
         private DateTime _referenceDate;
@@ -160,7 +157,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             };
         }
 
-        private double GetMoneyness(decimal strike, DateTime expiry, decimal iv)
+        protected double GetMoneyness(decimal strike, DateTime expiry, decimal iv)
         {
             var timeTillExpiry = OptionGreekIndicatorsHelper.TimeTillExpiry(expiry, _referenceDate);
             return Math.Log((double)(strike / _underlyingPrice)) / (double)iv / Math.Sqrt(timeTillExpiry);
