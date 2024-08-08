@@ -107,21 +107,40 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             if (entriesWithMissingIv.Count > 0)
             {
                 // Interpolate missing IVs and re-generate greeks
-                var ivInterpolator = new ImpliedVolatilityInterpolator(_processingDate, entries, (underlyingEntry as OptionUniverseEntry).Close,
+                var ivInterpolator = ImpliedVolatilityInterpolator.Create(_processingDate, entries, (underlyingEntry as OptionUniverseEntry).Close,
                     entries.Count - entriesWithMissingIv.Count);
-                foreach (var entry in entriesWithMissingIv)
+
+                if (ivInterpolator == null)
                 {
-                    var interpolatedIv = 0m;
-                    try
+                    Log.Error($"Failed to set up IV interpolator for {canonicalSymbol}.");
+                }
+                else
+                {
+                    var failedInterpolationsCount = 0;
+                    foreach (var entry in entriesWithMissingIv)
                     {
-                        interpolatedIv = ivInterpolator.Interpolate(entry.Symbol.ID.StrikePrice, entry.Symbol.ID.Date);
+                        var interpolatedIv = 0m;
+                        try
+                        {
+                            interpolatedIv = ivInterpolator.Interpolate(entry.Symbol.ID.StrikePrice, entry.Symbol.ID.Date);
+                        }
+                        catch
+                        {
+                            Log.Error($"Failed interpolating IV for {entry.Symbol.Value} :: Underlying price: {(underlyingEntry as OptionUniverseEntry).Close}");
+                            failedInterpolationsCount++;
+                        }
+
+                        if (interpolatedIv != 0)
+                        {
+                            var updatedGreeks = ivInterpolator.GetUpdatedGreeksIndicators(entry.Symbol, interpolatedIv);
+                            entry.SetGreeksIndicators(updatedGreeks);
+                        }
                     }
-                    catch (Exception e)
+
+                    if (failedInterpolationsCount > 0)
                     {
-                        Log.Error(e, $"Error interpolating IVs for {canonicalSymbol}. ");
+                        Log.Error($"Failed interpolating IV for {failedInterpolationsCount} out of {entriesWithMissingIv.Count} contracts for {canonicalSymbol}.");
                     }
-                    var updatedGreeks = ivInterpolator.GetUpdatedGreeksIndicators(entry.Symbol, interpolatedIv);
-                    entry.SetGreeksIndicators(updatedGreeks);
                 }
             }
 

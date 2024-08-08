@@ -19,6 +19,9 @@ using QuantConnect.Indicators;
 using QuantConnect.Data.Market;
 using Accord.Statistics.Models.Regression.Linear;
 using MathNet.Numerics.RootFinding;
+using System.Runtime.CompilerServices;
+using Accord.Math;
+using System.Linq;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -37,7 +40,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// <param name="referenceDate">The reference date of the data</param>
         /// <param name="entries">The original universe entries</param>
         /// <param name="underlyingPrice">The underlying price at the processing time</param>
-        /// <param name="numberOfEntriesWithValidIv">The number of entries with missing IV</param>
+        /// <param name="numberOfEntriesWithValidIv">The number of entries with valid IV</param>
         public ImpliedVolatilityInterpolator(DateTime referenceDate, List<OptionUniverseEntry> entries, decimal underlyingPrice, int numberOfEntriesWithValidIv)
         {
             if (entries.Count <= numberOfEntriesWithValidIv)
@@ -88,14 +91,56 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             var interest = greeksIndicators.InterestRate;
             var dividend = greeksIndicators.DividendYield;
 
-            // Use BSM for speed
-            var optionPrice = OptionGreekIndicatorsHelper.BlackTheoreticalPrice(interpolatedIv, _underlyingPrice, option.ID.StrikePrice,
-                timeTillExpiry, interest, dividend, option.ID.OptionRight);
+            decimal optionPrice;
+            try
+            {
+                optionPrice = OptionGreekIndicatorsHelper.ForwardTreeTheoreticalPrice(interpolatedIv, _underlyingPrice, option.ID.StrikePrice,
+                    timeTillExpiry, interest, dividend, option.ID.OptionRight);
+            }
+            catch
+            {
+                // Fall back to BSM
+                optionPrice = OptionGreekIndicatorsHelper.BlackTheoreticalPrice(interpolatedIv, _underlyingPrice, option.ID.StrikePrice,
+                    timeTillExpiry, interest, dividend, option.ID.OptionRight);
+            }
 
-            greeksIndicators.Update(new TradeBar { Symbol = option.Underlying, EndTime = _referenceDate, Close = _underlyingPrice });
-            greeksIndicators.Update(new TradeBar { Symbol = option, EndTime = _referenceDate, Close = optionPrice });
+            greeksIndicators.Update(new QuoteBar
+            {
+                Symbol = option.Underlying,
+                EndTime = _referenceDate,
+                Bid = new Bar { Close = _underlyingPrice },
+                Ask = null
+            });
+            greeksIndicators.Update(new QuoteBar
+            {
+                Symbol = option,
+                EndTime = _referenceDate,
+                Bid = new Bar { Close = optionPrice },
+                Ask = null
+            });
 
             return greeksIndicators;
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ImpliedVolatilityInterpolator"/> class.
+        /// Returns null if an error occurs during the creation
+        /// </summary>
+        /// <param name="referenceDate">The reference date of the data</param>
+        /// <param name="entries">The original universe entries</param>
+        /// <param name="underlyingPrice">The underlying price at the processing time</param>
+        /// <param name="numberOfEntriesWithValidIv">The number of entries with valid IV</param>
+        public static ImpliedVolatilityInterpolator Create(DateTime referenceDate, List<OptionUniverseEntry> entries, decimal underlyingPrice,
+            int numberOfEntriesWithValidIv)
+        {
+            try
+            {
+                return new ImpliedVolatilityInterpolator(referenceDate, entries, underlyingPrice, numberOfEntriesWithValidIv);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>
