@@ -157,6 +157,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             };
         }
 
+        // protected protection level for testing purpose
         protected double GetMoneyness(decimal strike, DateTime expiry, decimal iv)
         {
             var timeTillExpiry = OptionGreekIndicatorsHelper.TimeTillExpiry(expiry, _referenceDate);
