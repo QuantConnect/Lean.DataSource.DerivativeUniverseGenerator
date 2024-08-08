@@ -273,7 +273,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// </summary>
         /// <remarks>The underlying history is a List to avoid multiple enumerations of the history</remarks>
         protected virtual IEnumerable<IDerivativeUniverseFileEntry> GenerateDerivativeEntries(Symbol canonicalSymbol, List<Symbol> symbols,
-            // TODO: Underlying history might not be necessary, consider removing it and using the underlyingEntry.Close to update the indicators
             MarketHoursDatabase.Entry marketHoursEntry, List<Slice> underlyingHistory, IDerivativeUniverseFileEntry underlyingEntry)
         {
             foreach (var symbol in symbols)

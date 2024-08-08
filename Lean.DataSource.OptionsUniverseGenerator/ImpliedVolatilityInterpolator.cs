@@ -22,13 +22,23 @@ using MathNet.Numerics.RootFinding;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
-    internal class IvInterpolation
+    /// <summary>
+    /// Interpolates implied volatility for options with missing values
+    /// </summary>
+    internal class ImpliedVolatilityInterpolator
     {
         private decimal _underlyingPrice;
         private DateTime _referenceDate;
         private MultipleLinearRegression _model;
 
-        public IvInterpolation(DateTime referenceDate, List<OptionUniverseEntry> entries, decimal underlyingPrice, int numberOfEntriesWithValidIv)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ImpliedVolatilityInterpolator"/> class
+        /// </summary>
+        /// <param name="referenceDate">The reference date of the data</param>
+        /// <param name="entries">The original universe entries</param>
+        /// <param name="underlyingPrice">The underlying price at the processing time</param>
+        /// <param name="numberOfEntriesWithValidIv">The number of entries with missing IV</param>
+        public ImpliedVolatilityInterpolator(DateTime referenceDate, List<OptionUniverseEntry> entries, decimal underlyingPrice, int numberOfEntriesWithValidIv)
         {
             if (entries.Count <= numberOfEntriesWithValidIv)
             {
@@ -40,7 +50,6 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
 
             var modelInputs = new double[numberOfEntriesWithValidIv][];
             var modelOutputs = new double[numberOfEntriesWithValidIv];
-
             for (int i = 0, j = 0; i < entries.Count; i++)
             {
                 var entry = entries[i];
@@ -54,58 +63,62 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             _model = ols.Learn(modelInputs, modelOutputs);
         }
 
-        private double[] GetModelInput(decimal strike, DateTime expiry, decimal iv)
+        /// <summary>
+        /// Interpolates the implied volatility for the given strike and expiry
+        /// </summary>
+        public decimal Interpolate(decimal strike, DateTime expiry)
         {
-            var moneyness = GetMoneyness(strike, expiry, iv);
-            var ttm = GetTimeTillMaturity(expiry);
-            return new double[]
+            Func<double, double> f = (volatility) =>
             {
-                moneyness,
-                ttm,
-                moneyness * moneyness,
-                ttm * ttm,
-                ttm * moneyness
-            };
-        }
-
-        private double GetMoneyness(decimal strike, DateTime expiry, decimal iv)
-        {
-            var ttm = GetTimeTillMaturity(expiry);
-            return Math.Log((double)(strike / _underlyingPrice)) / (double)iv / Math.Sqrt(ttm);
-        }
-
-        private double GetTimeTillMaturity(DateTime expiry)
-        {
-            return (expiry - _referenceDate).TotalDays / 365d;
-        }
-
-        public decimal GetInterpolatedIv(decimal strike, DateTime expiry)
-        {
-            Func<double, double> f = (vol) =>
-            {
-                var input = GetModelInput(strike, expiry, Convert.ToDecimal(vol));
-                var iv = _model.Transform(input);
-                return vol - iv;
+                var input = GetModelInput(strike, expiry, Convert.ToDecimal(volatility));
+                var calculatedIv = _model.Transform(input);
+                return volatility - calculatedIv;
             };
             return Convert.ToDecimal(Brent.FindRoot(f, 1e-7d, 4.0d, 1e-4d, 100));
         }
 
+        /// <summary>
+        /// Gets an updated instance of <see cref="GreeksIndicators"/> with the interpolated implied volatility
+        /// </summary>
         public GreeksIndicators GetUpdatedGreeksIndicators(Symbol option, decimal interpolatedIv, OptionPricingModelType? optionModel = null,
             OptionPricingModelType? ivModel = null)
         {
             var greeksIndicators = new GreeksIndicators(option, null, optionModel, ivModel);
-            var timeToExpiration = Convert.ToDecimal((option.ID.Date - _referenceDate).TotalDays / 365d);
+            var timeTillExpiry = Convert.ToDecimal(OptionGreekIndicatorsHelper.TimeTillExpiry(option.ID.Date, _referenceDate));
             var interest = greeksIndicators.InterestRate;
             var dividend = greeksIndicators.DividendYield;
 
             // Use BSM for speed
-            var optionPrice = OptionGreekIndicatorsHelper.BlackTheoreticalPrice(interpolatedIv, _underlyingPrice, option.ID.StrikePrice, timeToExpiration,
-                interest, dividend, option.ID.OptionRight);
+            var optionPrice = OptionGreekIndicatorsHelper.BlackTheoreticalPrice(interpolatedIv, _underlyingPrice, option.ID.StrikePrice,
+                timeTillExpiry, interest, dividend, option.ID.OptionRight);
 
             greeksIndicators.Update(new TradeBar { Symbol = option.Underlying, EndTime = _referenceDate, Close = _underlyingPrice });
             greeksIndicators.Update(new TradeBar { Symbol = option, EndTime = _referenceDate, Close = optionPrice });
 
             return greeksIndicators;
+        }
+
+        /// <summary>
+        /// Gets a properly formatted input for the numerical model based on the given strike, expiry and implied volatility
+        /// </summary>
+        private double[] GetModelInput(decimal strike, DateTime expiry, decimal iv)
+        {
+            var moneyness = GetMoneyness(strike, expiry, iv);
+            var timeTillExpiry = OptionGreekIndicatorsHelper.TimeTillExpiry(expiry, _referenceDate);
+            return new double[]
+            {
+                moneyness,
+                timeTillExpiry,
+                moneyness * moneyness,
+                timeTillExpiry * timeTillExpiry,
+                timeTillExpiry * moneyness
+            };
+        }
+
+        private double GetMoneyness(decimal strike, DateTime expiry, decimal iv)
+        {
+            var timeTillExpiry = OptionGreekIndicatorsHelper.TimeTillExpiry(expiry, _referenceDate);
+            return Math.Log((double)(strike / _underlyingPrice)) / (double)iv / Math.Sqrt(timeTillExpiry);
         }
     }
 }

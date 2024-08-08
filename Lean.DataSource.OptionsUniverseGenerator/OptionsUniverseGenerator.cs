@@ -93,11 +93,13 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         {
             var entries = new List<OptionUniverseEntry>();
             var entriesWithMissingIv = new List<OptionUniverseEntry>();
+            // Enumerate the base entries to materialize them and check whether IVs are missing and need to be interpolated
             foreach (OptionUniverseEntry entry in base.GenerateDerivativeEntries(canonicalSymbol, symbols, marketHoursEntry, underlyingHistory, underlyingEntry))
             {
                 entries.Add(entry);
                 if (!entry.ImpliedVolatility.HasValue || entry.ImpliedVolatility == 0)
                 {
+                    // We keep the entries with missing IVs to interpolate them later and avoid iterating through the whole list again
                     entriesWithMissingIv.Add(entry);
                 }
             }
@@ -105,14 +107,14 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             if (entriesWithMissingIv.Count > 0)
             {
                 // Interpolate missing IVs and re-generate greeks
-                var ivInterpolator = new IvInterpolation(_processingDate, entries, (underlyingEntry as OptionUniverseEntry).Close,
+                var ivInterpolator = new ImpliedVolatilityInterpolator(_processingDate, entries, (underlyingEntry as OptionUniverseEntry).Close,
                     entries.Count - entriesWithMissingIv.Count);
                 foreach (var entry in entriesWithMissingIv)
                 {
                     var interpolatedIv = 0m;
                     try
                     {
-                        interpolatedIv = ivInterpolator.GetInterpolatedIv(entry.Symbol.ID.StrikePrice, entry.Symbol.ID.Date);
+                        interpolatedIv = ivInterpolator.Interpolate(entry.Symbol.ID.StrikePrice, entry.Symbol.ID.Date);
                     }
                     catch (Exception e)
                     {
