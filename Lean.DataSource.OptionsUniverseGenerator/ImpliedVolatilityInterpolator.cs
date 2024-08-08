@@ -25,7 +25,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
     /// <summary>
     /// Interpolates implied volatility for options with missing values
     /// </summary>
-    internal class ImpliedVolatilityInterpolator
+    public class ImpliedVolatilityInterpolator
     {
         private decimal _underlyingPrice;
         private DateTime _referenceDate;
@@ -115,7 +115,8 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             };
         }
 
-        private double GetMoneyness(decimal strike, DateTime expiry, decimal iv)
+        // protected protection level for testing purpose
+        protected double GetMoneyness(decimal strike, DateTime expiry, decimal iv)
         {
             var timeTillExpiry = OptionGreekIndicatorsHelper.TimeTillExpiry(expiry, _referenceDate);
             return Math.Log((double)(strike / _underlyingPrice)) / (double)iv / Math.Sqrt(timeTillExpiry);

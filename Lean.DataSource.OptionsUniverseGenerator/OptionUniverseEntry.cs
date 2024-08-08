@@ -114,7 +114,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// Sets the greeks indicators for the option contract.
         /// </summary>
         /// <remarks>Internal usage only, in case we need to override greeks and IV, like when interpolating</remarks>
-        internal void SetGreeksIndicators(GreeksIndicators greeksIndicators)
+        public void SetGreeksIndicators(GreeksIndicators greeksIndicators)
         {
             _greeksIndicators = greeksIndicators;
         }
