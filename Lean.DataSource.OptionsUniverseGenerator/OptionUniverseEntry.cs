@@ -17,8 +17,6 @@ using Lean.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Data.UniverseSelection;
-using QuantConnect.Indicators;
-using System.Linq;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -64,21 +62,38 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         public override void Update(Slice slice)
         {
-            base.Update(slice);
-
-            if (Symbol.SecurityType.IsOption())
+            if (!Symbol.SecurityType.IsOption())
+            {
+                base.Update(slice);
+            }
+            else
             {
                 if (slice.TryGet<OpenInterest>(Symbol, out var openInterest))
                 {
                     OpenInterest = openInterest.Value;
                 }
-            }
 
-            if (_greeksIndicators != null)
-            {
-                foreach (var data in slice.AllData.OfType<IBaseDataBar>())
+                if (slice.Bars.TryGetValue(Symbol, out var tradeBar))
                 {
-                    _greeksIndicators.Update(data);
+                    Volume = tradeBar.Volume;
+                }
+
+                if (slice.QuoteBars.TryGetValue(Symbol, out var quoteBar))
+                {
+                    Open = quoteBar.Open;
+                    High = quoteBar.High;
+                    Low = quoteBar.Low;
+                    Close = quoteBar.Close;
+                }
+
+                if (slice.Bars.TryGetValue(Symbol.Underlying, out var underlyingTrade))
+                {
+                    _greeksIndicators.Update(underlyingTrade);
+                }
+
+                foreach (var quote in slice.QuoteBars.Values)
+                {
+                    _greeksIndicators.Update(quote);
                 }
             }
         }
@@ -96,64 +111,12 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         }
 
         /// <summary>
-        /// Helper class that holds and updates the greeks indicators
+        /// Sets the greeks indicators for the option contract.
         /// </summary>
-        private class GreeksIndicators
+        /// <remarks>Internal usage only, in case we need to override greeks and IV, like when interpolating</remarks>
+        public void SetGreeksIndicators(GreeksIndicators greeksIndicators)
         {
-            private readonly static IRiskFreeInterestRateModel _interestRateProvider = new InterestRateProvider();
-
-            private readonly Symbol _optionSymbol;
-            private readonly Symbol _mirrorOptionSymbol;
-
-            private readonly ImpliedVolatility _iv;
-
-            private readonly Delta _delta;
-            private readonly Gamma _gamma;
-            private readonly Vega _vega;
-            private readonly Theta _theta;
-            private readonly Rho _rho;
-
-            public GreeksIndicators(Symbol optionSymbol, Symbol mirrorOptionSymbol)
-            {
-                _optionSymbol = optionSymbol;
-                _mirrorOptionSymbol = mirrorOptionSymbol;
-
-                IDividendYieldModel dividendYieldModel = optionSymbol.SecurityType != SecurityType.IndexOption
-                    ? DividendYieldProvider.CreateForOption(_optionSymbol)
-                    : new ConstantDividendYieldModel(0);
-
-                _iv = new ImpliedVolatility(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _delta = new Delta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _gamma = new Gamma(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _vega = new Vega(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _theta = new Theta(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-                _rho = new Rho(_optionSymbol, _interestRateProvider, dividendYieldModel, _mirrorOptionSymbol);
-
-                _delta.ImpliedVolatility = _iv;
-                _gamma.ImpliedVolatility = _iv;
-                _vega.ImpliedVolatility = _iv;
-                _theta.ImpliedVolatility = _iv;
-                _rho.ImpliedVolatility = _iv;
-            }
-
-            public void Update(IBaseDataBar data)
-            {
-                var point = new IndicatorDataPoint(data.Symbol, data.EndTime, data.Close);
-
-                _iv.Update(point);
-                _delta.Update(point);
-                _gamma.Update(point);
-                _vega.Update(point);
-                _theta.Update(point);
-                _rho.Update(point);
-            }
-
-            public Greeks GetGreeks()
-            {
-                return new Greeks(_delta, _gamma, _vega, _theta, _rho, 0m);
-            }
-
-            public decimal ImpliedVolatility => _delta.ImpliedVolatility;
+            _greeksIndicators = greeksIndicators;
         }
 
         /// <summary>
