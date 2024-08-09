@@ -27,9 +27,10 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
     /// </summary>
     public class ImpliedVolatilityInterpolator
     {
-        private decimal _underlyingPrice;
-        private DateTime _referenceDate;
-        private MultipleLinearRegression _model;
+        private readonly decimal _underlyingPrice;
+        private readonly double _underlyingPriceDouble;
+        private readonly DateTime _referenceDate;
+        private readonly MultipleLinearRegression _model;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ImpliedVolatilityInterpolator"/> class
@@ -46,6 +47,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             }
 
             _underlyingPrice = underlyingPrice;
+            _underlyingPriceDouble = (double)underlyingPrice;
             _referenceDate = referenceDate;
 
             var modelInputs = new double[numberOfEntriesWithValidIv][];
@@ -84,21 +86,23 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             OptionPricingModelType? ivModel = null)
         {
             var greeksIndicators = new GreeksIndicators(option, null, optionModel, ivModel);
-            var timeTillExpiry = Convert.ToDecimal(OptionGreekIndicatorsHelper.TimeTillExpiry(option.ID.Date, _referenceDate));
-            var interest = greeksIndicators.InterestRate;
-            var dividend = greeksIndicators.DividendYield;
+            var iv = (double)interpolatedIv;
+            var strike = (double)option.ID.StrikePrice;
+            var timeTillExpiry = OptionGreekIndicatorsHelper.TimeTillExpiry(option.ID.Date, _referenceDate);
+            var interest = (double)greeksIndicators.InterestRate;
+            var dividend = (double)greeksIndicators.DividendYield;
 
-            decimal optionPrice;
+            double optionPrice;
             try
             {
-                optionPrice = OptionGreekIndicatorsHelper.ForwardTreeTheoreticalPrice(interpolatedIv, _underlyingPrice, option.ID.StrikePrice,
-                    timeTillExpiry, interest, dividend, option.ID.OptionRight);
+                optionPrice = OptionGreekIndicatorsHelper.ForwardTreeTheoreticalPrice(iv, _underlyingPriceDouble, strike, timeTillExpiry, interest,
+                    dividend, option.ID.OptionRight);
             }
             catch
             {
                 // Fall back to BSM
-                optionPrice = OptionGreekIndicatorsHelper.BlackTheoreticalPrice(interpolatedIv, _underlyingPrice, option.ID.StrikePrice,
-                    timeTillExpiry, interest, dividend, option.ID.OptionRight);
+                optionPrice = OptionGreekIndicatorsHelper.BlackTheoreticalPrice(iv, _underlyingPriceDouble, strike, timeTillExpiry, interest,
+                    dividend, option.ID.OptionRight);
             }
 
             greeksIndicators.Update(new QuoteBar
@@ -112,7 +116,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             {
                 Symbol = option,
                 EndTime = _referenceDate,
-                Bid = new Bar { Close = optionPrice },
+                Bid = new Bar { Close = Convert.ToDecimal(optionPrice) },
                 Ask = null
             });
 
