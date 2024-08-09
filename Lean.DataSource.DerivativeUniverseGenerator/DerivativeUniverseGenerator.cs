@@ -166,7 +166,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     // Underlying not mapped or missing data, so just skip them
                     if (!underlyingEntryGenerated)
                     {
-                        underlyingsWithMissingData.Add(underlyingSymbol);
+                        lock (underlyingsWithMissingData)
+                        {
+                            underlyingsWithMissingData.Add(underlyingSymbol);
+                        }
                         Log.Error($"DerivativeUniverseGenerator.GenerateUniverses(): " +
                             $"Underlying data missing for {underlyingSymbol} on {_processingDate:yyyy/MM/dd}, universe file will not be generated.");
                         UpdateEta(ref symbolCounter, totalContracts, start, contractsSymbols.Count);
