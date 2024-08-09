@@ -129,6 +129,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         {
             var cancellationTokenSource = new CancellationTokenSource();
             var symbolCounter = 0;
+            var totalContracts = symbols.Sum(x => x.Value.Count);
+            var underlyingsWithMissingData = new List<Symbol>(symbols.Count / 4);
             var start = DateTime.UtcNow;
             Parallel.ForEach(symbols, new ParallelOptions { MaxDegreeOfParallelism = (int)(Environment.ProcessorCount * 1.5m), CancellationToken = cancellationTokenSource.Token }, kvp =>
             {
@@ -159,16 +161,29 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     var tempEntry = CreateUniverseEntry(canonicalSymbol);
                     writer.WriteLine($"#{tempEntry.GetHeader()}");
 
-                    GenerateUnderlyingLine(underlyingSymbol, underlyingMarketHoursEntry, writer, out var underlyingHistory);
-                    GenerateDerivativeLines(canonicalSymbol, contractsSymbols, optionMarketHoursEntry, underlyingHistory, writer);
-
-                    var currentCounter = Interlocked.Increment(ref symbolCounter);
-                    if (currentCounter % 10 == 0)
+                    var underlyingEntryGenerated = TryGenerateAndWriteUnderlyingLine(underlyingSymbol, underlyingMarketHoursEntry, writer,
+                        out var underlyingEntry, out var underlyingHistory);
+                    // Underlying not mapped or missing data, so just skip them
+                    if (!underlyingEntryGenerated)
                     {
-                        var took = DateTime.UtcNow - start;
-                        var eta = (symbols.Count * took) / currentCounter;
-                        Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): finished processing {currentCounter} symbols. Took: {took}. ETA: {eta}");
+                        lock (underlyingsWithMissingData)
+                        {
+                            underlyingsWithMissingData.Add(underlyingSymbol);
+                        }
+                        Log.Error($"DerivativeUniverseGenerator.GenerateUniverses(): " +
+                            $"Underlying data missing for {underlyingSymbol} on {_processingDate:yyyy/MM/dd}, universe file will not be generated.");
+                        UpdateEta(ref symbolCounter, totalContracts, start, contractsSymbols.Count);
+                        return;
                     }
+
+                    var derivativeEntries = GenerateDerivativeEntries(canonicalSymbol, contractsSymbols, optionMarketHoursEntry, underlyingHistory,
+                        underlyingEntry);
+                    foreach (var entry in derivativeEntries)
+                    {
+                        writer.WriteLine(entry.ToCsv());
+                    }
+
+                    UpdateEta(ref symbolCounter, totalContracts, start, contractsSymbols.Count);
                 }
                 catch (Exception exception)
                 {
@@ -177,7 +192,27 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 }
             });
 
+            if (underlyingsWithMissingData.Count > 0)
+            {
+                Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): " +
+                    $"Underlying data missing for {underlyingsWithMissingData.Count} out of {symbols.Count} symbols on {_processingDate:yyyy/MM/dd}.");
+            }
+
             return !cancellationTokenSource.IsCancellationRequested;
+        }
+
+        private static void UpdateEta(ref int symbolCounter, int totalContracts, DateTime start, int processedContractsCount)
+        {
+            const int step = 100000;
+            var prevMod = symbolCounter % step;
+            var currentCounter = Interlocked.Add(ref symbolCounter, processedContractsCount);
+            var currentMod = currentCounter % step;
+            if (processedContractsCount >= step || currentMod <= prevMod)
+            {
+                var took = DateTime.UtcNow - start;
+                var eta = (totalContracts - currentCounter) * took / currentCounter;
+                Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): finished processing {currentCounter} symbols. Took: {took}. ETA: {eta}");
+            }
         }
 
         /// <summary>
@@ -194,8 +229,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// <remarks>
         /// This method should be overridden to return an empty list (and skipping writing to the stream) if no underlying entry is needed.
         /// </remarks>
-        protected virtual void GenerateUnderlyingLine(Symbol underlyingSymbol, MarketHoursDatabase.Entry marketHoursEntry,
-            StreamWriter writer, out List<Slice> history)
+        protected virtual bool TryGenerateAndWriteUnderlyingLine(Symbol underlyingSymbol, MarketHoursDatabase.Entry marketHoursEntry,
+            StreamWriter writer, out IDerivativeUniverseFileEntry entry, out List<Slice> history)
         {
             GetHistoryTimeRange(PriceHistoryResolutions[0], marketHoursEntry, out var historyEnd, out var historyStart);
             var underlyingHistoryRequest = new HistoryRequest(
@@ -212,19 +247,23 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 DataNormalizationMode.ScaledRaw,
                 LeanData.GetCommonTickTypeForCommonDataTypes(typeof(TradeBar), _securityType));
 
-            var entry = CreateUniverseEntry(underlyingSymbol);
+            entry = CreateUniverseEntry(underlyingSymbol);
             history = GetHistory(new[] { underlyingHistoryRequest }, marketHoursEntry.ExchangeHours.TimeZone, marketHoursEntry);
+            var success = true;
 
             if (history == null || history.Count == 0)
             {
                 Log.Error($"DerivativeUniverseGenerator.GenerateUnderlyingLine(): " +
                     $"No historical data found for underlying {underlyingSymbol} on {_processingDate:yyyy/MM/dd}. Prices will be set to zero.");
+                success = false;
             }
             else
             {
                 entry.Update(history[^1]);
             }
             writer.WriteLine(entry.ToCsv());
+
+            return success;
         }
 
         private List<Slice> GetHistory(HistoryRequest[] historyRequests,
@@ -262,11 +301,11 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         }
 
         /// <summary>
-        /// Generates and writes the derivative universe entries for the specified canonical symbol.
+        /// Generates the derivative universe entries for the specified canonical symbol.
         /// </summary>
         /// <remarks>The underlying history is a List to avoid multiple enumerations of the history</remarks>
-        protected virtual void GenerateDerivativeLines(Symbol canonicalSymbol, IEnumerable<Symbol> symbols,
-            MarketHoursDatabase.Entry marketHoursEntry, List<Slice> underlyingHistory, StreamWriter writer)
+        protected virtual IEnumerable<IDerivativeUniverseFileEntry> GenerateDerivativeEntries(Symbol canonicalSymbol, List<Symbol> symbols,
+            MarketHoursDatabase.Entry marketHoursEntry, List<Slice> underlyingHistory, IDerivativeUniverseFileEntry underlyingEntry)
         {
             foreach (var symbol in symbols)
             {
@@ -289,7 +328,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     entry = GenerateDerivativeEntry(symbol, history, underlyingHistory);
                 }
 
-                writer.WriteLine(entry.ToCsv());
+                yield return entry;
             }
         }
 
