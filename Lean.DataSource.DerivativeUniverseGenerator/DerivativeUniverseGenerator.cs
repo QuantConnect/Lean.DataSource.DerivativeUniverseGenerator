@@ -52,6 +52,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
         protected readonly MarketHoursDatabase _marketHoursDatabase;
 
+        private bool _forceEtaUpdate;
+
         /// <summary>
         /// Resolutions used to fetch price history
         /// </summary>
@@ -198,17 +200,26 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             return !cancellationTokenSource.IsCancellationRequested;
         }
 
-        private static void UpdateEta(ref int symbolCounter, int totalContracts, DateTime start, int processedContractsCount)
+        private void UpdateEta(ref int symbolCounter, int totalContracts, DateTime start, int processedContractsCount)
         {
             const int step = 100000;
             var prevMod = symbolCounter % step;
             var currentCounter = Interlocked.Add(ref symbolCounter, processedContractsCount);
             var currentMod = currentCounter % step;
-            if (processedContractsCount >= step || currentMod <= prevMod)
+            if (processedContractsCount >= step || currentMod <= prevMod || _forceEtaUpdate)
             {
+                _forceEtaUpdate = false;
                 var took = DateTime.UtcNow - start;
-                var eta = (totalContracts - currentCounter) / currentCounter * took;
-                Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): finished processing {currentCounter} symbols. Took: {took}. ETA: {eta}");
+                try
+                {
+                    var eta = (totalContracts - currentCounter) / currentCounter * took;
+                    Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): finished processing {currentCounter} symbols. Took: {took}. ETA: {eta}");
+                }
+                catch
+                {
+                    // We couldn't get a proper ETA, let's force the update on next call
+                    _forceEtaUpdate = true;
+                }
             }
         }
 
