@@ -52,6 +52,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
         protected readonly MarketHoursDatabase _marketHoursDatabase;
 
+        private long _forceEtaUpdate;
+
         /// <summary>
         /// Resolutions used to fetch price history
         /// </summary>
@@ -130,7 +132,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             var cancellationTokenSource = new CancellationTokenSource();
             var symbolCounter = 0;
             var totalContracts = symbols.Sum(x => x.Value.Count);
-            var underlyingsWithMissingData = new List<Symbol>(symbols.Count / 4);
+            var underlyingsWithMissingData = 0;
             var start = DateTime.UtcNow;
             Parallel.ForEach(symbols, new ParallelOptions { MaxDegreeOfParallelism = (int)(Environment.ProcessorCount * 1.5m), CancellationToken = cancellationTokenSource.Token }, kvp =>
             {
@@ -153,7 +155,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     }
 
                     Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): " +
-                        $"Generating universe for {underlyingSymbol} on {_processingDate:yyyy/MM/dd} with {contractsSymbols.Count} constituents.");
+                        $"Generating universe for {canonicalSymbol} on {_processingDate:yyyy/MM/dd} with {contractsSymbols.Count} constituents.");
 
                     using var writer = new StreamWriter(universeFileName);
 
@@ -166,10 +168,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     // Underlying not mapped or missing data, so just skip them
                     if (!underlyingEntryGenerated)
                     {
-                        lock (underlyingsWithMissingData)
-                        {
-                            underlyingsWithMissingData.Add(underlyingSymbol);
-                        }
+                        Interlocked.Increment(ref underlyingsWithMissingData);
                         Log.Error($"DerivativeUniverseGenerator.GenerateUniverses(): " +
                             $"Underlying data missing for {underlyingSymbol} on {_processingDate:yyyy/MM/dd}, universe file will not be generated.");
                         UpdateEta(ref symbolCounter, totalContracts, start, contractsSymbols.Count);
@@ -192,26 +191,34 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 }
             });
 
-            if (underlyingsWithMissingData.Count > 0)
+            if (underlyingsWithMissingData > 0)
             {
                 Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): " +
-                    $"Underlying data missing for {underlyingsWithMissingData.Count} out of {symbols.Count} symbols on {_processingDate:yyyy/MM/dd}.");
+                    $"Underlying data missing for {underlyingsWithMissingData} out of {symbols.Count} symbols on {_processingDate:yyyy/MM/dd}.");
             }
 
             return !cancellationTokenSource.IsCancellationRequested;
         }
 
-        private static void UpdateEta(ref int symbolCounter, int totalContracts, DateTime start, int processedContractsCount)
+        private void UpdateEta(ref int symbolCounter, int totalContracts, DateTime start, int processedContractsCount)
         {
             const int step = 100000;
             var prevMod = symbolCounter % step;
             var currentCounter = Interlocked.Add(ref symbolCounter, processedContractsCount);
             var currentMod = currentCounter % step;
-            if (processedContractsCount >= step || currentMod <= prevMod)
+            if (processedContractsCount >= step || currentMod <= prevMod || Interlocked.CompareExchange(ref _forceEtaUpdate, 0, 1) == 1)
             {
                 var took = DateTime.UtcNow - start;
-                var eta = (totalContracts - currentCounter) * took / currentCounter;
-                Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): finished processing {currentCounter} symbols. Took: {took}. ETA: {eta}");
+                try
+                {
+                    var eta = (totalContracts - currentCounter) / currentCounter * took;
+                    Log.Trace($"DerivativeUniverseGenerator.GenerateUniverses(): finished processing {currentCounter} symbols. Took: {took}. ETA: {eta}");
+                }
+                catch
+                {
+                    // We couldn't get a proper ETA, let's force the update on next call
+                    Interlocked.Exchange(ref _forceEtaUpdate, 1);
+                }
             }
         }
 

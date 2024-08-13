@@ -84,7 +84,7 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
                     }
 
                     var symbols = GetSymbolsFromZipEntryNames(zipFileName, canonicalSymbol, resolution);
-                    if (symbols != null)
+                    if (symbols != null && symbols.Count > 0)
                     {
                         result[canonicalSymbol] = symbols;
                     }
