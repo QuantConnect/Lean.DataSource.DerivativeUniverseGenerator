@@ -305,6 +305,9 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             historyEnd = resolution != Resolution.Daily ? _processingDate : _processingDate.AddDays(1);
             historyStart = Time.GetStartTimeForTradeBars(marketHoursEntry.ExchangeHours, historyEnd, resolution.ToTimeSpan(),
                 _historyBarCount, false, marketHoursEntry.DataTimeZone);
+
+            historyEnd = historyEnd.ConvertToUtc(marketHoursEntry.ExchangeHours.TimeZone);
+            historyStart = historyStart.ConvertToUtc(marketHoursEntry.ExchangeHours.TimeZone);
         }
 
         /// <summary>
