@@ -239,10 +239,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected virtual bool TryGenerateAndWriteUnderlyingLine(Symbol underlyingSymbol, MarketHoursDatabase.Entry marketHoursEntry,
             StreamWriter writer, out IDerivativeUniverseFileEntry entry, out List<Slice> history)
         {
-            GetHistoryTimeRange(PriceHistoryResolutions[0], marketHoursEntry, out var historyEnd, out var historyStart);
+            GetHistoryTimeRange(PriceHistoryResolutions[0], marketHoursEntry, out var historyEndUtc, out var historyStartUtc);
             var underlyingHistoryRequest = new HistoryRequest(
-                historyStart,
-                historyEnd,
+                historyStartUtc,
+                historyEndUtc,
                 typeof(TradeBar),
                 underlyingSymbol,
                 PriceHistoryResolutions[0],
@@ -280,11 +280,11 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             foreach (var resolution in PriceHistoryResolutions)
             {
-                GetHistoryTimeRange(resolution, marketHoursEntry, out var historyEnd, out var historyStart);
+                GetHistoryTimeRange(resolution, marketHoursEntry, out var historyEndUtc, out var historyStartUtc);
 
                 var resolutionHistoryRequests = historyRequests.Select(x =>
                 {
-                    var request = new HistoryRequest(x, x.Symbol, historyStart, historyEnd);
+                    var request = new HistoryRequest(x, x.Symbol, historyStartUtc, historyEndUtc);
                     request.Resolution = resolution;
                     request.FillForwardResolution = resolution;
                     return request;
@@ -300,11 +300,15 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             return history;
         }
 
-        private void GetHistoryTimeRange(Resolution resolution, MarketHoursDatabase.Entry marketHoursEntry, out DateTime historyEnd, out DateTime historyStart)
+        private void GetHistoryTimeRange(Resolution resolution, MarketHoursDatabase.Entry marketHoursEntry,
+            out DateTime historyEndUtc, out DateTime historyStartUtc)
         {
-            historyEnd = resolution != Resolution.Daily ? _processingDate : _processingDate.AddDays(1);
-            historyStart = Time.GetStartTimeForTradeBars(marketHoursEntry.ExchangeHours, historyEnd, resolution.ToTimeSpan(),
+            historyEndUtc = resolution != Resolution.Daily ? _processingDate : _processingDate.AddDays(1);
+            historyStartUtc = Time.GetStartTimeForTradeBars(marketHoursEntry.ExchangeHours, historyEndUtc, resolution.ToTimeSpan(),
                 _historyBarCount, false, marketHoursEntry.DataTimeZone);
+
+            historyEndUtc = historyEndUtc.ConvertToUtc(marketHoursEntry.ExchangeHours.TimeZone);
+            historyStartUtc = historyStartUtc.ConvertToUtc(marketHoursEntry.ExchangeHours.TimeZone);
         }
 
         /// <summary>
@@ -321,8 +325,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     Log.Debug($"Generating universe entry for {symbol.Value}");
                 }
 
-                GetHistoryTimeRange(PriceHistoryResolutions[0], marketHoursEntry, out var historyEnd, out var historyStart);
-                var historyRequests = GetDerivativeHistoryRequests(symbol, historyStart, historyEnd, marketHoursEntry);
+                GetHistoryTimeRange(PriceHistoryResolutions[0], marketHoursEntry, out var historyEndUtc, out var historyStartUtc);
+                var historyRequests = GetDerivativeHistoryRequests(symbol, historyStartUtc, historyEndUtc, marketHoursEntry);
 
                 IDerivativeUniverseFileEntry entry;
                 if (historyRequests == null || historyRequests.Length == 0)
@@ -342,13 +346,13 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// <summary>
         /// Creates the requests to get the data to be used to generate the universe entry for the given derivative symbol
         /// </summary>
-        protected virtual HistoryRequest[] GetDerivativeHistoryRequests(Symbol symbol, DateTime start, DateTime end,
+        protected virtual HistoryRequest[] GetDerivativeHistoryRequests(Symbol symbol, DateTime startUtc, DateTime endUtc,
             MarketHoursDatabase.Entry marketHoursEntry)
         {
             var dataTypes = new[] { typeof(TradeBar), typeof(QuoteBar), typeof(OpenInterest) };
             return dataTypes.Select(dataType => new HistoryRequest(
-                start,
-                end,
+                startUtc,
+                endUtc,
                 dataType,
                 symbol,
                 PriceHistoryResolutions[0],
