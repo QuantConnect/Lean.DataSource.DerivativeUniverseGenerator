@@ -52,7 +52,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
         protected readonly MarketHoursDatabase _marketHoursDatabase;
 
-        private bool _forceEtaUpdate;
+        private long _forceEtaUpdate;
 
         /// <summary>
         /// Resolutions used to fetch price history
@@ -206,9 +206,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             var prevMod = symbolCounter % step;
             var currentCounter = Interlocked.Add(ref symbolCounter, processedContractsCount);
             var currentMod = currentCounter % step;
-            if (processedContractsCount >= step || currentMod <= prevMod || _forceEtaUpdate)
+            if (processedContractsCount >= step || currentMod <= prevMod || Interlocked.CompareExchange(ref _forceEtaUpdate, 0, 1) == 1)
             {
-                _forceEtaUpdate = false;
                 var took = DateTime.UtcNow - start;
                 try
                 {
@@ -218,7 +217,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 catch
                 {
                     // We couldn't get a proper ETA, let's force the update on next call
-                    _forceEtaUpdate = true;
+                    Interlocked.Exchange(ref _forceEtaUpdate, 1);
                 }
             }
         }
