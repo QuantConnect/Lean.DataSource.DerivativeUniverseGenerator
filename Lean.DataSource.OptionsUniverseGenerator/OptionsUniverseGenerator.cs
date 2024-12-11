@@ -60,17 +60,9 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         protected override string GetUniverseFileName(Symbol canonicalSymbol)
         {
-            var universeDirectory = _securityType switch
-            {
-                SecurityType.Option => Path.Combine(_universesOutputFolderRoot, canonicalSymbol.Underlying.Value.ToLowerInvariant()),
-                SecurityType.IndexOption => Path.Combine(_universesOutputFolderRoot, canonicalSymbol.ID.Symbol.ToLowerInvariant()),
-                SecurityType.FutureOption => Path.Combine(_universesOutputFolderRoot,
-                    canonicalSymbol.Underlying.ID.Symbol.ToLowerInvariant(),
-                    $"{canonicalSymbol.Underlying.ID.Date:yyyyMMdd}"),
-                _ => throw new ArgumentOutOfRangeException(nameof(canonicalSymbol), $"Unsupported security type: {_securityType}")
-            };
-
+            var universeDirectory = LeanData.GenerateUniversesDirectory(_outputFolderRoot, canonicalSymbol);
             Directory.CreateDirectory(universeDirectory);
+
             return Path.Combine(universeDirectory, $"{_processingDate:yyyyMMdd}.csv");
         }
 

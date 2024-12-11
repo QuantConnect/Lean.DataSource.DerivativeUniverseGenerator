@@ -21,7 +21,6 @@ using QuantConnect;
 using QuantConnect.Util;
 using QuantConnect.Interfaces;
 using System.Collections.Generic;
-using QuantConnect.Lean.Engine.DataFeeds;
 
 namespace Lean.DataSource.DerivativeUniverseGenerator
 {
@@ -100,17 +99,33 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
         private IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
         {
             var tickTypeLower = _symbolsDataTickType.TickTypeToLower();
-            var optionStyleLower = _securityType.DefaultOptionStyle().OptionStyleToLower();
-            var dateStr = resolution < Resolution.Hour ? date.ToString("yyyyMMdd") : date.ToString("yyyy");
-            var pattern = $"{(resolution < Resolution.Hour ? "" : "*_")}{dateStr}_{tickTypeLower}_{optionStyleLower}.zip";
-            var files = Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), pattern, SearchOption.AllDirectories);
 
-            if (resolution >= Resolution.Hour)
+            if (resolution == Resolution.Minute)
             {
-                files = files.Where(fileName => new FileInfo(fileName).Name.Split('_').Length == 4);
-                        }
+                var basePath = Path.Combine(_dataSourceFolder, resolution.ResolutionToLower());
+                var directories = _securityType != SecurityType.FutureOption
+                    ? Directory.EnumerateDirectories(basePath)
+                    : Directory.EnumerateDirectories(basePath, "*", new EnumerationOptions() { RecurseSubdirectories = true, MaxRecursionDepth = 1});
 
-            return files;
+                var dateStr = date.ToString("yyyyMMdd");
+                var optionStyleLower = _securityType.DefaultOptionStyle().OptionStyleToLower();
+
+                return directories
+                    .Select(directory => Path.Combine(directory, $"{dateStr}_{tickTypeLower}_{optionStyleLower}.zip"))
+                    .Where(fileName => File.Exists(fileName));
+            }
+            // Support for resolutions higher than minute, just for Lean local repo data generation
+            else
+            {
+                var dateStr = date.ToString("yyyy");
+                return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"*{dateStr}*.zip", SearchOption.AllDirectories)
+                    .Where(fileName =>
+                    {
+                        var fileInfo = new FileInfo(fileName);
+                        var fileNameParts = fileInfo.Name.Split('_');
+                        return fileNameParts.Length == 4 && fileNameParts[1] == dateStr && fileNameParts[2] == tickTypeLower;
+                    });
+            }
         }
 
         /// <summary>
