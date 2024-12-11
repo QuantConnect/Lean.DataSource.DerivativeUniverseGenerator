@@ -26,7 +26,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
     /// <summary>
     /// File based symbol chain provider
     /// </summary>
-    internal class ChainSymbolProvider
+    public class ChainSymbolProvider
     {
         private readonly IDataCacheProvider _dataCacheProvider;
         protected readonly DateTime _processingDate;
@@ -95,7 +95,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// <summary>
         /// Gets the zip file names for the canonical symbols where the contracts or universe constituents will be read from.
         /// </summary>
-        private IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
+        protected virtual IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
         {
             var tickTypeLower = _symbolsDataTickType.TickTypeToLower();
 
@@ -104,7 +104,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 var basePath = Path.Combine(_dataSourceFolder, resolution.ResolutionToLower());
                 var directories = _securityType != SecurityType.FutureOption
                     ? Directory.EnumerateDirectories(basePath)
-                    : Directory.EnumerateDirectories(basePath, "*", new EnumerationOptions() { RecurseSubdirectories = true, MaxRecursionDepth = 1});
+                    : Directory.EnumerateDirectories(basePath, "*", new EnumerationOptions() { RecurseSubdirectories = true, MaxRecursionDepth = 1 });
 
                 var dateStr = date.ToString("yyyyMMdd");
                 var optionStyleLower = _securityType.DefaultOptionStyle().OptionStyleToLower();
@@ -117,7 +117,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             else
             {
                 var dateStr = date.ToString("yyyy");
-                return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"*{dateStr}*.zip", SearchOption.AllDirectories)
+                return Directory.EnumerateFiles(
+                    Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()),
+                    $"*{dateStr}*.zip",
+                    SearchOption.AllDirectories)
                     .Where(fileName =>
                     {
                         var fileInfo = new FileInfo(fileName);
@@ -143,15 +146,20 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 return null;
             }
 
-            return zipEntries
+            var symbols = zipEntries
                 .Select(zipEntry => LeanData.ReadSymbolFromZipEntry(canonicalSymbol, resolution, zipEntry))
                 // do not return expired contracts
-                .Where(symbol => _processingDate.Date < symbol.ID.Date.Date)
-                .OrderBy(symbol => symbol.ID.OptionRight)
+                .Where(symbol => _processingDate.Date < symbol.ID.Date.Date);
+
+            if (canonicalSymbol.SecurityType.IsOption())
+            {
+                symbols = symbols.OrderBy(symbol => symbol.ID.OptionRight)
                 .ThenBy(symbol => symbol.ID.StrikePrice)
                 .ThenBy(symbol => symbol.ID.Date)
-                .ThenBy(symbol => symbol.ID)
-                .ToList();
+                    .ThenBy(symbol => symbol.ID);
+            }
+
+            return symbols.ToList();
         }
     }
 }

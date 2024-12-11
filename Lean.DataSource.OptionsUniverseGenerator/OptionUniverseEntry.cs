@@ -23,14 +23,9 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
     /// <summary>
     /// Representation of an option contract universe entry
     /// </summary>
-    public class OptionUniverseEntry : BaseDerivativeUniverseFileEntry
+    public class OptionUniverseEntry : BaseContractUniverseFileEntry
     {
         private GreeksIndicators _greeksIndicators;
-
-        /// <summary>
-        /// Option contract's open interest on the processing date.
-        /// </summary>
-        public decimal? OpenInterest { get; set; }
 
         /// <summary>
         /// Option contract's implied volatility on the processing date.
@@ -63,43 +58,20 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         public override void Update(Slice slice)
         {
-            if (!Symbol.SecurityType.IsOption())
+            base.Update(slice);
+
+            if (_greeksIndicators != null)
             {
-                base.Update(slice);
-            }
-            else
-            {
-                if (slice.TryGet<OpenInterest>(Symbol, out var openInterest))
+                if (slice.Bars.TryGetValue(Symbol.Underlying, out var underlyingTrade))
                 {
-                    OpenInterest = openInterest.Value;
+                    _greeksIndicators.Update(underlyingTrade);
                 }
 
-                if (slice.Bars.TryGetValue(Symbol, out var tradeBar))
+                foreach (var quote in slice.QuoteBars.Values)
                 {
-                    Volume = tradeBar.Volume;
+                    _greeksIndicators.Update(quote);
                 }
 
-                if (slice.QuoteBars.TryGetValue(Symbol, out var quoteBar))
-                {
-                    Open = quoteBar.Open;
-                    High = quoteBar.High;
-                    Low = quoteBar.Low;
-                    Close = quoteBar.Close;
-                }
-
-                if (_greeksIndicators != null)
-                {
-                    if (slice.Bars.TryGetValue(Symbol.Underlying, out var underlyingTrade))
-                    {
-                        _greeksIndicators.Update(underlyingTrade);
-                    }
-
-                    foreach (var quote in slice.QuoteBars.Values)
-                    {
-                        _greeksIndicators.Update(quote);
-                    }
-
-                }
             }
         }
 
@@ -119,14 +91,6 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         public void SetGreeksIndicators(GreeksIndicators greeksIndicators)
         {
             _greeksIndicators = greeksIndicators;
-        }
-
-        /// <summary>
-        /// Gets the header of the CSV file
-        /// </summary>
-        public override string GetHeader()
-        {
-            return OptionUniverse.CsvHeader;
         }
 
         /// <summary>

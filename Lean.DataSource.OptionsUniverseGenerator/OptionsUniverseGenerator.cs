@@ -14,7 +14,6 @@
 */
 
 using System;
-using System.IO;
 using System.Linq;
 using QuantConnect.Data;
 using QuantConnect.Util;
@@ -53,17 +52,6 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         protected override IDerivativeUniverseFileEntry CreateUniverseEntry(Symbol symbol)
         {
             return new OptionUniverseEntry(symbol);
-        }
-
-        /// <summary>
-        /// Generates the file name where the derivative's universe entry will be saved.
-        /// </summary>
-        protected override string GetUniverseFileName(Symbol canonicalSymbol)
-        {
-            var universeDirectory = LeanData.GenerateUniversesDirectory(_outputFolderRoot, canonicalSymbol);
-            Directory.CreateDirectory(universeDirectory);
-
-            return Path.Combine(universeDirectory, $"{_processingDate:yyyyMMdd}.csv");
         }
 
         /// <summary>
