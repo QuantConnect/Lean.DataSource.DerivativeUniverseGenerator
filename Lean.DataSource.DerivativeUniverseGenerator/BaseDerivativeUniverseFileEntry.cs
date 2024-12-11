@@ -13,10 +13,9 @@
  * limitations under the License.
 */
 
-using QuantConnect;
 using QuantConnect.Data;
 
-namespace Lean.DataSource.DerivativeUniverseGenerator
+namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 {
     /// <summary>
     /// Interface for a constituent entry in the derivative universe file.

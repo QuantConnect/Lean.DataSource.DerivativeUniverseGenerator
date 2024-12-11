@@ -17,12 +17,11 @@
 using System;
 using System.IO;
 using System.Linq;
-using QuantConnect;
 using QuantConnect.Util;
 using QuantConnect.Interfaces;
 using System.Collections.Generic;
 
-namespace Lean.DataSource.DerivativeUniverseGenerator
+namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 {
     /// <summary>
     /// File based symbol chain provider

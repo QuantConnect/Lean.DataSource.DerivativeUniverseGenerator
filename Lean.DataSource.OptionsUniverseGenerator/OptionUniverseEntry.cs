@@ -13,7 +13,7 @@
  * limitations under the License.
 */
 
-using Lean.DataSource.DerivativeUniverseGenerator;
+using QuantConnect.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Data.UniverseSelection;

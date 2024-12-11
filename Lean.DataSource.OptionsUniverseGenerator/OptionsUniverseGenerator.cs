@@ -19,7 +19,7 @@ using System.Linq;
 using QuantConnect.Data;
 using QuantConnect.Util;
 using QuantConnect.Securities;
-using Lean.DataSource.DerivativeUniverseGenerator;
+using QuantConnect.DataSource.DerivativeUniverseGenerator;
 using System.Collections.Generic;
 using QuantConnect.Logging;
 
