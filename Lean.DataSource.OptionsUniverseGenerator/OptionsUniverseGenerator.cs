@@ -30,6 +30,8 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
     /// </summary>
     public class OptionsUniverseGenerator : DerivativeUniverseGenerator.DerivativeUniverseGenerator
     {
+        private static readonly SecurityType[] _supportedSecurityTypes = { SecurityType.Option, SecurityType.IndexOption, SecurityType.FutureOption };
+
         /// <summary>
         /// Initializes a new instance of the <see cref="OptionsUniverseGenerator" /> class.
         /// </summary>
@@ -42,9 +44,9 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             string outputFolderRoot)
             : base(processingDate, securityType, market, dataFolderRoot, outputFolderRoot)
         {
-            if (securityType != SecurityType.Option && securityType != SecurityType.IndexOption)
+            if (!_supportedSecurityTypes.Contains(securityType))
             {
-                throw new ArgumentException($"Only {nameof(SecurityType.Option)} and {nameof(SecurityType.IndexOption)} are supported", nameof(securityType));
+                throw new ArgumentException($"Only {string.Join(", ", _supportedSecurityTypes)} are supported", nameof(securityType));
             }
         }
 
@@ -63,8 +65,8 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 SecurityType.Option => Path.Combine(_universesOutputFolderRoot, canonicalSymbol.Underlying.Value.ToLowerInvariant()),
                 SecurityType.IndexOption => Path.Combine(_universesOutputFolderRoot, canonicalSymbol.ID.Symbol.ToLowerInvariant()),
                 SecurityType.FutureOption => Path.Combine(_universesOutputFolderRoot,
-                    canonicalSymbol.ID.Symbol.ToLowerInvariant(),
-                    $"{canonicalSymbol.ID.Date:yyyyMMdd}"),
+                    canonicalSymbol.Underlying.ID.Symbol.ToLowerInvariant(),
+                    $"{canonicalSymbol.Underlying.ID.Date:yyyyMMdd}"),
                 _ => throw new ArgumentOutOfRangeException(nameof(canonicalSymbol), $"Unsupported security type: {_securityType}")
             };
 
@@ -91,10 +93,17 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         protected override IEnumerable<IDerivativeUniverseFileEntry> GenerateDerivativeEntries(Symbol canonicalSymbol, List<Symbol> symbols,
             MarketHoursDatabase.Entry marketHoursEntry, List<Slice> underlyingHistory, IDerivativeUniverseFileEntry underlyingEntry)
         {
+            var generatedEntries = base.GenerateDerivativeEntries(canonicalSymbol, symbols, marketHoursEntry, underlyingHistory, underlyingEntry);
+
+            if (!OptionUniverseEntry.HasGreeks(canonicalSymbol))
+            {
+                return generatedEntries;
+            }
+
             var entries = new List<OptionUniverseEntry>();
             var entriesWithMissingIv = new List<OptionUniverseEntry>();
             // Enumerate the base entries to materialize them and check whether IVs are missing and need to be interpolated
-            foreach (OptionUniverseEntry entry in base.GenerateDerivativeEntries(canonicalSymbol, symbols, marketHoursEntry, underlyingHistory, underlyingEntry))
+            foreach (OptionUniverseEntry entry in generatedEntries)
             {
                 entries.Add(entry);
                 if (!entry.ImpliedVolatility.HasValue || entry.ImpliedVolatility == 0)

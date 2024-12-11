@@ -49,8 +49,9 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         public OptionUniverseEntry(Symbol symbol)
            : base(symbol)
         {
-            // Options universes contain a line for the underlying: we don't need greeks for it
-            if (symbol.SecurityType.IsOption())
+            // Options universes contain a line for the underlying: we don't need greeks for it.
+            // Future options don't have greeks either.
+            if (HasGreeks(symbol))
             {
                 var mirrorOptionSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
                 _greeksIndicators = new GreeksIndicators(symbol, mirrorOptionSymbol);
@@ -86,14 +87,18 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                     Close = quoteBar.Close;
                 }
 
-                if (slice.Bars.TryGetValue(Symbol.Underlying, out var underlyingTrade))
+                if (_greeksIndicators != null)
                 {
-                    _greeksIndicators.Update(underlyingTrade);
-                }
+                    if (slice.Bars.TryGetValue(Symbol.Underlying, out var underlyingTrade))
+                    {
+                        _greeksIndicators.Update(underlyingTrade);
+                    }
 
-                foreach (var quote in slice.QuoteBars.Values)
-                {
-                    _greeksIndicators.Update(quote);
+                    foreach (var quote in slice.QuoteBars.Values)
+                    {
+                        _greeksIndicators.Update(quote);
+                    }
+
                 }
             }
         }
@@ -122,6 +127,14 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         public override string GetHeader()
         {
             return OptionUniverse.CsvHeader;
+        }
+
+        /// <summary>
+        /// Returns true if the symbol has greeks.
+        /// </summary>
+        public static bool HasGreeks(Symbol symbol)
+        {
+            return symbol.SecurityType.IsOption() && symbol.SecurityType != SecurityType.FutureOption;
         }
     }
 }
