@@ -81,7 +81,31 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
 
         public Greeks GetGreeks()
         {
-            return new Greeks(_delta, _gamma, _vega, _theta, _rho, 0m);
+            return new GreeksHolder(_delta, _gamma, _vega, _theta, _rho);
+        }
+
+        private class GreeksHolder : Greeks
+        {
+            public override decimal Delta { get; }
+
+            public override decimal Gamma { get; }
+
+            public override decimal Vega { get; }
+
+            public override decimal Theta { get; }
+
+            public override decimal Rho { get; }
+
+            public override decimal Lambda { get; }
+
+            public GreeksHolder(decimal delta, decimal gamma, decimal vega, decimal theta, decimal rho)
+            {
+                Delta = delta;
+                Gamma = gamma;
+                Vega = vega;
+                Theta = theta;
+                Rho = rho;
+            }
         }
     }
 }
