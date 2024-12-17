@@ -36,9 +36,9 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
         {
         }
 
-        protected override IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
+        protected override IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution, TickType tickType)
         {
-            var tickTypeLower = _symbolsDataTickType.TickTypeToLower();
+            var tickTypeLower = tickType.TickTypeToLower();
 
             if (resolution == Resolution.Minute)
             {
@@ -52,13 +52,20 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
             // Support for resolutions higher than minute, just for Lean local repo data generation
             else
             {
-                return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"*_{tickTypeLower}.zip")
-                    .Where(fileName =>
-                    {
-                        var fileInfo = new FileInfo(fileName);
-                        var fileNameParts = Path.GetFileNameWithoutExtension(fileInfo.Name).Split('_');
-                        return fileNameParts.Length == 2 && fileNameParts[1] == tickTypeLower;
-                    });
+                try
+                {
+                    return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"*_{tickTypeLower}.zip")
+                        .Where(fileName =>
+                        {
+                            var fileInfo = new FileInfo(fileName);
+                            var fileNameParts = Path.GetFileNameWithoutExtension(fileInfo.Name).Split('_');
+                            return fileNameParts.Length == 2 && fileNameParts[1] == tickTypeLower;
+                        });
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    return Enumerable.Empty<string>();
+                }
             }
         }
     }

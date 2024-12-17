@@ -13,6 +13,7 @@
  * limitations under the License.
 */
 
+using QuantConnect.Data.UniverseSelection;
 using QuantConnect.DataSource.DerivativeUniverseGenerator;
 
 namespace QuantConnect.DataSource.FuturesUniverseGenerator
@@ -29,6 +30,23 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
         public FutureUniverseEntry(Symbol symbol)
            : base(symbol)
         {
+        }
+
+        /// <summary>
+        /// Returns a CSV representation of the future contract's data.
+        /// </summary>
+        public override string ToCsv()
+        {
+            // Use Lean's FutureUniverse class to generate the CSV to avoid writing/reading mistakes
+            return FutureUniverse.ToCsv(Symbol, Open, High, Low, Close, Volume, OpenInterest);
+        }
+
+        /// <summary>
+        /// Gets the header of the CSV file
+        /// </summary>
+        public override string GetHeader()
+        {
+            return FutureUniverse.CsvHeader;
         }
     }
 }

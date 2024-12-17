@@ -15,7 +15,6 @@
 
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
-using QuantConnect.Data.UniverseSelection;
 
 namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 {
@@ -67,23 +66,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     Close = quoteBar.Close;
                 }
             }
-        }
-
-        /// <summary>
-        /// Returns a CSV representation of the contract's data.
-        /// </summary>
-        public override string ToCsv()
-        {
-            // Use Lean's OptionUniverse class to generate the CSV to avoid writing/reading mistakes
-            return OptionUniverse.ToCsv(Symbol, Open, High, Low, Close, Volume, OpenInterest, null, null);
-        }
-
-        /// <summary>
-        /// Gets the header of the CSV file
-        /// </summary>
-        public override string GetHeader()
-        {
-            return OptionUniverse.CsvHeader;
         }
     }
 }

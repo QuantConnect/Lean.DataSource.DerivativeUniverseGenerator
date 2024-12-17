@@ -85,6 +85,14 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         }
 
         /// <summary>
+        /// Gets the header of the CSV file
+        /// </summary>
+        public override string GetHeader()
+        {
+            return OptionUniverse.CsvHeader;
+        }
+
+        /// <summary>
         /// Sets the greeks indicators for the option contract.
         /// </summary>
         /// <remarks>Internal usage only, in case we need to override greeks and IV, like when interpolating</remarks>
