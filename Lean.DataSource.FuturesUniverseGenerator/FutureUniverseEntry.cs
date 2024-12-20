@@ -13,6 +13,8 @@
  * limitations under the License.
 */
 
+using QuantConnect.Data;
+using QuantConnect.Data.Market;
 using QuantConnect.Data.UniverseSelection;
 using QuantConnect.DataSource.DerivativeUniverseGenerator;
 
@@ -30,6 +32,19 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
         public FutureUniverseEntry(Symbol symbol)
            : base(symbol)
         {
+        }
+
+        /// <summary>
+        /// Update the entry with the data from the slice.
+        /// </summary>
+        public override void Update(Slice slice)
+        {
+            base.Update(slice);
+
+            if (slice.TryGet<OpenInterest>(Symbol, out var openInterest))
+            {
+                OpenInterest = openInterest.Value;
+            }
         }
 
         /// <summary>
