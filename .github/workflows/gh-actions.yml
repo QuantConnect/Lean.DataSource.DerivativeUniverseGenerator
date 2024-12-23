@@ -48,4 +48,4 @@ jobs:
             # Build
             dotnet build /p:Configuration=Release /v:quiet /p:WarningLevel=1 Lean.DataSource.DerivativeUniverseGenerator.sln
             # Run Tests
-            dotnet test ./QuantConnect.DataSource.DerivativeUniverseGeneratorTests/bin/Release/net9.0/QuantConnect.DataSource.DerivativeUniverseGeneratorTests.dll
+            dotnet test ./QuantConnect.DataSource.DerivativeUniverseGeneratorTests/bin/Release/QuantConnect.DataSource.DerivativeUniverseGeneratorTests.dll
