@@ -1,0 +1,51 @@
+name: Build & Test
+
+on:
+  push:
+    branches: ['*']
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Liberate disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+
+      - name: Checkout Lean Same Branch
+        id: lean-same-branch
+        uses: actions/checkout@v2
+        continue-on-error: true
+        with:
+          ref: ${{ github.ref }}
+          repository: QuantConnect/Lean
+          path: Lean
+
+      - name: Checkout Lean Master
+        if: steps.lean-same-branch.outcome != 'success'
+        uses: actions/checkout@v2
+        with:
+          repository: QuantConnect/Lean
+          path: Lean
+
+      - name: Move Lean
+        run: mv Lean ../Lean
+
+      - name: Run Image
+        uses: addnab/docker-run-action@v3
+        with:
+          image: quantconnect/lean:foundation
+          options: -v /home/runner/work:/__w --workdir /__w/Lean.DataSource.DerivativeUniverseGenerator/Lean.DataSource.DerivativeUniverseGenerator
+          shell: bash
+          run: |
+            # Build
+            dotnet build /p:Configuration=Release /v:quiet /p:WarningLevel=1 Lean.DataSource.DerivativeUniverseGenerator.sln
+            # Run Tests
+            dotnet test ./QuantConnect.DataSource.DerivativeUniverseGeneratorTests/bin/Release/net9.0/QuantConnect.DataSource.DerivativeUniverseGeneratorTests.dll

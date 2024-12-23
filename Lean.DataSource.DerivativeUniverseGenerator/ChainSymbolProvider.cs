@@ -146,8 +146,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         {
             foreach (var tickType in _symbolsDataTickTypes)
             {
-                var fileNames = GetZipFileNames(date, resolution, tickType);
-                if (fileNames.Any())
+                var fileNames = GetZipFileNames(date, resolution, tickType).ToList();
+                if (fileNames.Count > 0)
                 {
                     return fileNames;
                 }
@@ -184,6 +184,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     .ThenBy(symbol => symbol.ID.StrikePrice)
                     .ThenBy(symbol => symbol.ID.Date)
                     .ThenBy(symbol => symbol.ID);
+            }
+            else
+            {
+                symbols = symbols.OrderBy(symbol => symbol.ID.Date).ThenBy(symbol => symbol.ID);
             }
 
             return symbols.ToList();
