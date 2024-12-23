@@ -175,7 +175,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             var symbols = zipEntries
                 .Select(zipEntry => LeanData.ReadSymbolFromZipEntry(canonicalSymbol, resolution, zipEntry))
                 // do not return expired contracts
-                .Where(symbol => _processingDate.Date < symbol.ID.Date.Date);
+                .Where(symbol => _processingDate.Date < symbol.ID.Date.Date)
+                .Distinct();
 
             if (canonicalSymbol.SecurityType.IsOption())
             {
