@@ -19,7 +19,6 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Lean.DataSource.DerivativeUniverseGenerator;
 using NodaTime;
 using QuantConnect.Configuration;
 using QuantConnect.Data;
@@ -44,11 +43,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected readonly string _market;
         protected readonly string _dataFolderRoot;
         protected readonly string _outputFolderRoot;
-        protected readonly string _universesOutputFolderRoot;
 
-        private readonly IDataProvider _dataProvider;
-        private readonly IHistoryProvider _historyProvider;
-        private readonly ZipDataCacheProvider _dataCacheProvider;
+        protected readonly IDataProvider _dataProvider;
+        protected readonly IHistoryProvider _historyProvider;
+        protected readonly ZipDataCacheProvider _dataCacheProvider;
 
         protected readonly MarketHoursDatabase _marketHoursDatabase;
 
@@ -77,8 +75,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             _market = market;
             _dataFolderRoot = dataFolderRoot;
             _outputFolderRoot = outputFolderRoot;
-
-            _universesOutputFolderRoot = Path.Combine(_outputFolderRoot, _securityType.SecurityTypeToLower(), _market, "universes");
 
             _dataProvider = Composer.Instance.GetExportedValueByTypeName<IDataProvider>(Config.Get("data-provider", "DefaultDataProvider"));
 
@@ -110,8 +106,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             try
             {
-                var symbolChainProvider = new ChainSymbolProvider(_dataCacheProvider, _processingDate, _securityType, _market, _dataFolderRoot);
-                var symbols = symbolChainProvider.GetSymbols();
+                var symbols = GetSymbols();
                 Log.Trace($"DerivativeUniverseGenerator.Run(): found {symbols.Count} underlying symbols with {symbols.Sum(x => x.Value.Count)} derivative symbols");
                 return GenerateUniverses(symbols);
             }
@@ -121,6 +116,15 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     $"DerivativeUniverseGenerator.Run(): Error processing {_securityType}-{_market} universes for date {_processingDate:yyyy-MM-dd}");
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Gets the available universe symbols grouped by their canonical symbol.
+        /// </summary>
+        protected virtual Dictionary<Symbol, List<Symbol>> GetSymbols()
+        {
+            var symbolChainProvider = new ChainSymbolProvider(_dataCacheProvider, _processingDate, _securityType, _market, _dataFolderRoot);
+            return symbolChainProvider.GetSymbols();
         }
 
         /// <summary>
@@ -140,17 +144,19 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 var contractsSymbols = kvp.Value;
                 try
                 {
-                    var underlyingSymbol = canonicalSymbol.Underlying;
-
                     var universeFileName = GetUniverseFileName(canonicalSymbol);
 
-                    var underlyingMarketHoursEntry = _marketHoursDatabase.GetEntry(underlyingSymbol.ID.Market, underlyingSymbol, underlyingSymbol.SecurityType);
-                    var optionMarketHoursEntry = _marketHoursDatabase.GetEntry(canonicalSymbol.ID.Market, canonicalSymbol, canonicalSymbol.SecurityType);
+                    var underlyingSymbol = canonicalSymbol.Underlying;
+                    var underlyingMarketHoursEntry = underlyingSymbol is not null
+                        ? _marketHoursDatabase.GetEntry(underlyingSymbol.ID.Market, underlyingSymbol, underlyingSymbol.SecurityType)
+                        : null;
+                    var derivativeMarketHoursEntry = _marketHoursDatabase.GetEntry(canonicalSymbol.ID.Market, canonicalSymbol, canonicalSymbol.SecurityType);
 
-                    if (!underlyingMarketHoursEntry.ExchangeHours.IsDateOpen(_processingDate) ||
-                        !optionMarketHoursEntry.ExchangeHours.IsDateOpen(_processingDate))
+                    if ((underlyingMarketHoursEntry is not null && !underlyingMarketHoursEntry.ExchangeHours.IsDateOpen(_processingDate)) ||
+                        !derivativeMarketHoursEntry.ExchangeHours.IsDateOpen(_processingDate))
                     {
-                        Log.Trace($"Market is closed on {_processingDate:yyyy/MM/dd} for {underlyingSymbol}, universe file will not be generated.");
+                        Log.Trace($"Market is closed on {_processingDate:yyyy/MM/dd} for {underlyingSymbol ?? canonicalSymbol}, " +
+                            $"universe file will not be generated.");
                         return;
                     }
 
@@ -163,8 +169,13 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     var tempEntry = CreateUniverseEntry(canonicalSymbol);
                     writer.WriteLine($"#{tempEntry.GetHeader()}");
 
+                    List<Slice> underlyingHistory = null;
+                    IDerivativeUniverseFileEntry underlyingEntry = null;
+
+                    if (underlyingSymbol is not null)
+                    {
                     var underlyingEntryGenerated = TryGenerateAndWriteUnderlyingLine(underlyingSymbol, underlyingMarketHoursEntry, writer,
-                        out var underlyingEntry, out var underlyingHistory);
+                            out underlyingEntry, out underlyingHistory);
                     // Underlying not mapped or missing data, so just skip them
                     if (!underlyingEntryGenerated)
                     {
@@ -174,9 +185,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                         UpdateEta(ref symbolCounter, totalContracts, start, contractsSymbols.Count);
                         return;
                     }
+                    }
 
-                    var derivativeEntries = GenerateDerivativeEntries(canonicalSymbol, contractsSymbols, optionMarketHoursEntry, underlyingHistory,
-                        underlyingEntry);
+                    var derivativeEntries = GenerateDerivativeEntries(canonicalSymbol, contractsSymbols, derivativeMarketHoursEntry,
+                        underlyingHistory, underlyingEntry);
                     foreach (var entry in derivativeEntries)
                     {
                         writer.WriteLine(entry.ToCsv());
@@ -225,7 +237,13 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// <summary>
         /// Generates the file name where the derivative's universe entry will be saved.
         /// </summary>
-        protected abstract string GetUniverseFileName(Symbol canonicalSymbol);
+        protected virtual string GetUniverseFileName(Symbol canonicalSymbol)
+        {
+            var universeDirectory = LeanData.GenerateUniversesDirectory(_outputFolderRoot, canonicalSymbol);
+            Directory.CreateDirectory(universeDirectory);
+
+            return Path.Combine(universeDirectory, $"{_processingDate:yyyyMMdd}.csv");
+        }
 
         /// <summary>
         /// Generates the derivative's underlying universe entry and gets the historical data used for the entry generation.
@@ -371,7 +389,9 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected virtual IDerivativeUniverseFileEntry GenerateDerivativeEntry(Symbol symbol, List<Slice> history, List<Slice> underlyingHistory)
         {
             var entry = CreateUniverseEntry(symbol);
-            using var enumerator = new SynchronizingSliceEnumerator(history.GetEnumerator(), underlyingHistory.GetEnumerator());
+            using IEnumerator<Slice> enumerator = underlyingHistory is not null
+                ? new SynchronizingSliceEnumerator(history.GetEnumerator(), underlyingHistory.GetEnumerator())
+                : history.GetEnumerator();
 
             while (enumerator.MoveNext())
             {

@@ -14,12 +14,11 @@
 */
 
 using System;
-using System.IO;
 using System.Linq;
 using QuantConnect.Data;
 using QuantConnect.Util;
 using QuantConnect.Securities;
-using Lean.DataSource.DerivativeUniverseGenerator;
+using QuantConnect.DataSource.DerivativeUniverseGenerator;
 using System.Collections.Generic;
 using QuantConnect.Logging;
 
@@ -30,6 +29,8 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
     /// </summary>
     public class OptionsUniverseGenerator : DerivativeUniverseGenerator.DerivativeUniverseGenerator
     {
+        private static readonly SecurityType[] _supportedSecurityTypes = { SecurityType.Option, SecurityType.IndexOption, SecurityType.FutureOption };
+
         /// <summary>
         /// Initializes a new instance of the <see cref="OptionsUniverseGenerator" /> class.
         /// </summary>
@@ -42,34 +43,15 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             string outputFolderRoot)
             : base(processingDate, securityType, market, dataFolderRoot, outputFolderRoot)
         {
-            if (securityType != SecurityType.Option && securityType != SecurityType.IndexOption)
+            if (!_supportedSecurityTypes.Contains(securityType))
             {
-                throw new ArgumentException($"Only {nameof(SecurityType.Option)} and {nameof(SecurityType.IndexOption)} are supported", nameof(securityType));
+                throw new ArgumentException($"Only {string.Join(", ", _supportedSecurityTypes)} are supported", nameof(securityType));
             }
         }
 
         protected override IDerivativeUniverseFileEntry CreateUniverseEntry(Symbol symbol)
         {
             return new OptionUniverseEntry(symbol);
-        }
-
-        /// <summary>
-        /// Generates the file name where the derivative's universe entry will be saved.
-        /// </summary>
-        protected override string GetUniverseFileName(Symbol canonicalSymbol)
-        {
-            var universeDirectory = _securityType switch
-            {
-                SecurityType.Option => Path.Combine(_universesOutputFolderRoot, canonicalSymbol.Underlying.Value.ToLowerInvariant()),
-                SecurityType.IndexOption => Path.Combine(_universesOutputFolderRoot, canonicalSymbol.ID.Symbol.ToLowerInvariant()),
-                SecurityType.FutureOption => Path.Combine(_universesOutputFolderRoot,
-                    canonicalSymbol.ID.Symbol.ToLowerInvariant(),
-                    $"{canonicalSymbol.ID.Date:yyyyMMdd}"),
-                _ => throw new ArgumentOutOfRangeException(nameof(canonicalSymbol), $"Unsupported security type: {_securityType}")
-            };
-
-            Directory.CreateDirectory(universeDirectory);
-            return Path.Combine(universeDirectory, $"{_processingDate:yyyyMMdd}.csv");
         }
 
         /// <summary>
@@ -91,10 +73,17 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         protected override IEnumerable<IDerivativeUniverseFileEntry> GenerateDerivativeEntries(Symbol canonicalSymbol, List<Symbol> symbols,
             MarketHoursDatabase.Entry marketHoursEntry, List<Slice> underlyingHistory, IDerivativeUniverseFileEntry underlyingEntry)
         {
+            var generatedEntries = base.GenerateDerivativeEntries(canonicalSymbol, symbols, marketHoursEntry, underlyingHistory, underlyingEntry);
+
+            if (!OptionUniverseEntry.HasGreeks(canonicalSymbol))
+            {
+                return generatedEntries;
+            }
+
             var entries = new List<OptionUniverseEntry>();
             var entriesWithMissingIv = new List<OptionUniverseEntry>();
             // Enumerate the base entries to materialize them and check whether IVs are missing and need to be interpolated
-            foreach (OptionUniverseEntry entry in base.GenerateDerivativeEntries(canonicalSymbol, symbols, marketHoursEntry, underlyingHistory, underlyingEntry))
+            foreach (OptionUniverseEntry entry in generatedEntries)
             {
                 entries.Add(entry);
                 if (!entry.ImpliedVolatility.HasValue || entry.ImpliedVolatility == 0)

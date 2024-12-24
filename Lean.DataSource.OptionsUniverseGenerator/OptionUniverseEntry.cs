@@ -13,7 +13,7 @@
  * limitations under the License.
 */
 
-using Lean.DataSource.DerivativeUniverseGenerator;
+using QuantConnect.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Data.UniverseSelection;
@@ -23,14 +23,9 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
     /// <summary>
     /// Representation of an option contract universe entry
     /// </summary>
-    public class OptionUniverseEntry : BaseDerivativeUniverseFileEntry
+    public class OptionUniverseEntry : BaseContractUniverseFileEntry
     {
         private GreeksIndicators _greeksIndicators;
-
-        /// <summary>
-        /// Option contract's open interest on the processing date.
-        /// </summary>
-        public decimal? OpenInterest { get; set; }
 
         /// <summary>
         /// Option contract's implied volatility on the processing date.
@@ -49,8 +44,9 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         public OptionUniverseEntry(Symbol symbol)
            : base(symbol)
         {
-            // Options universes contain a line for the underlying: we don't need greeks for it
-            if (symbol.SecurityType.IsOption())
+            // Options universes contain a line for the underlying: we don't need greeks for it.
+            // Future options don't have greeks either.
+            if (HasGreeks(symbol))
             {
                 var mirrorOptionSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
                 _greeksIndicators = new GreeksIndicators(symbol, mirrorOptionSymbol);
@@ -62,30 +58,10 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         public override void Update(Slice slice)
         {
-            if (!Symbol.SecurityType.IsOption())
+            base.Update(slice);
+
+            if (_greeksIndicators != null)
             {
-                base.Update(slice);
-            }
-            else
-            {
-                if (slice.TryGet<OpenInterest>(Symbol, out var openInterest))
-                {
-                    OpenInterest = openInterest.Value;
-                }
-
-                if (slice.Bars.TryGetValue(Symbol, out var tradeBar))
-                {
-                    Volume = tradeBar.Volume;
-                }
-
-                if (slice.QuoteBars.TryGetValue(Symbol, out var quoteBar))
-                {
-                    Open = quoteBar.Open;
-                    High = quoteBar.High;
-                    Low = quoteBar.Low;
-                    Close = quoteBar.Close;
-                }
-
                 if (slice.Bars.TryGetValue(Symbol.Underlying, out var underlyingTrade))
                 {
                     _greeksIndicators.Update(underlyingTrade);
@@ -95,6 +71,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 {
                     _greeksIndicators.Update(quote);
                 }
+
             }
         }
 
@@ -108,6 +85,14 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         }
 
         /// <summary>
+        /// Gets the header of the CSV file
+        /// </summary>
+        public override string GetHeader()
+        {
+            return OptionUniverse.CsvHeader;
+        }
+
+        /// <summary>
         /// Sets the greeks indicators for the option contract.
         /// </summary>
         /// <remarks>Internal usage only, in case we need to override greeks and IV, like when interpolating</remarks>
@@ -117,11 +102,11 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         }
 
         /// <summary>
-        /// Gets the header of the CSV file
+        /// Returns true if the symbol has greeks.
         /// </summary>
-        public override string GetHeader()
+        public static bool HasGreeks(Symbol symbol)
         {
-            return OptionUniverse.CsvHeader;
+            return symbol.SecurityType.IsOption() && symbol.SecurityType != SecurityType.FutureOption;
         }
     }
 }

@@ -20,6 +20,7 @@ using System;
 
 using QuantConnect.Configuration;
 using QuantConnect.Logging;
+using QuantConnect.Util;
 
 namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 {
@@ -43,9 +44,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
     {
         private static readonly string DataFleetDeploymentDateEnvVariable = "QC_DATAFLEET_DEPLOYMENT_DATE";
 
-        protected virtual void MainImpl(string[] args)
+        protected virtual void MainImpl(string[] args, string[] argNamesToIgnore = null)
         {
-            Initialize(args, out var securityType, out var market, out var dataFolderRoot, out var outputFolderRoot);
+            Initialize(args, out var securityType, out var market, out var dataFolderRoot, out var outputFolderRoot,
+                argNamesToIgnore ?? Array.Empty<string>());
 
             Log.Trace($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): " +
                 $"Security type: {securityType}. Market: {market}. Data folder: {dataFolderRoot}. Output folder: {outputFolderRoot}");
@@ -85,18 +87,25 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// Validate and extract command line args and configuration options.
         /// </summary>
         protected virtual void Initialize(string[] args, out SecurityType securityType, out string market, out string dataFolderRoot,
-            out string outputFolderRoot)
+            out string outputFolderRoot, string[] argNamesToIgnore)
         {
             var argsData = args.Select(x => x.Split('=')).ToDictionary(x => x[0], x => x.Length > 1 ? x[1] : null);
 
-            if (!argsData.TryGetValue("--security-type", out var securityTypeStr) ||
+            if (!argNamesToIgnore.Contains("security-type"))
+            {
+                if (!argsData.TryGetValue("--security-type", out var securityTypeStr) ||
                 !Enum.TryParse(securityTypeStr, true, out securityType) ||
                 !Enum.IsDefined(typeof(SecurityType), securityType))
-            {
-                if (!Config.TryGetValue("security-type", SecurityType.Option, out securityType))
                 {
-                    throw new ArgumentException("Invalid or missing security type.");
+                    if (!Config.TryGetValue("security-type", SecurityType.Option, out securityType))
+                    {
+                        throw new ArgumentException("Invalid or missing security type.");
+                    }
                 }
+            }
+            else
+            {
+                securityType = default;
             }
 
             if (!argsData.TryGetValue("--market", out market) && !Config.TryGetValue("market", out market) || string.IsNullOrEmpty(market))

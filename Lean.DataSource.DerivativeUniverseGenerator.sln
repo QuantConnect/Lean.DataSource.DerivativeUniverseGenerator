@@ -19,6 +19,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuantConnect.DataSource.Der
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DataProcessing", "DataProcessing\DataProcessing.csproj", "{8688840C-3170-4D88-A821-6BD1AB643B82}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuantConnect.DataSource.FuturesUniverseGenerator", "Lean.DataSource.FuturesUniverseGenerator\QuantConnect.DataSource.FuturesUniverseGenerator.csproj", "{864E8D98-4C9E-4CC7-AB67-97EEA861EAE0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -57,6 +59,10 @@ Global
 		{8688840C-3170-4D88-A821-6BD1AB643B82}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8688840C-3170-4D88-A821-6BD1AB643B82}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8688840C-3170-4D88-A821-6BD1AB643B82}.Release|Any CPU.Build.0 = Release|Any CPU
+		{864E8D98-4C9E-4CC7-AB67-97EEA861EAE0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{864E8D98-4C9E-4CC7-AB67-97EEA861EAE0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{864E8D98-4C9E-4CC7-AB67-97EEA861EAE0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{864E8D98-4C9E-4CC7-AB67-97EEA861EAE0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
