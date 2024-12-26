@@ -106,7 +106,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         }
 
         protected abstract DerivativeUniverseGenerator GetUniverseGenerator(SecurityType securityType, string market, string dataFolderRoot,
-            string outputFolderRoot, DateTime processingDate, IDataProvider dataProvider, ZipDataCacheProvider dataCacheProvider,
+            string outputFolderRoot, DateTime processingDate, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider,
             HistoryProviderManager historyProvider);
 
         /// <summary>

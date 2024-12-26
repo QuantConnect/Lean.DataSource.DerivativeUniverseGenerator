@@ -37,7 +37,7 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
         }
 
         protected override DerivativeUniverseGenerator.DerivativeUniverseGenerator GetUniverseGenerator(SecurityType securityType, string market,
-            string dataFolderRoot, string outputFolderRoot, DateTime processingDate, IDataProvider dataProvider, ZipDataCacheProvider dataCacheProvider,
+            string dataFolderRoot, string outputFolderRoot, DateTime processingDate, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider,
             HistoryProviderManager historyProvider)
         {
             return new FuturesUniverseGenerator(processingDate, market, dataFolderRoot, outputFolderRoot, dataProvider,
