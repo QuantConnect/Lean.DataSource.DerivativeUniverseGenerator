@@ -20,13 +20,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NodaTime;
-using QuantConnect.Configuration;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Interfaces;
-using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Lean.Engine.DataFeeds.Enumerators;
-using QuantConnect.Lean.Engine.HistoricalData;
 using QuantConnect.Logging;
 using QuantConnect.Securities;
 using QuantConnect.Util;
@@ -46,7 +43,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
         protected readonly IDataProvider _dataProvider;
         protected readonly IHistoryProvider _historyProvider;
-        protected readonly ZipDataCacheProvider _dataCacheProvider;
+        protected readonly IDataCacheProvider _dataCacheProvider;
 
         protected readonly MarketHoursDatabase _marketHoursDatabase;
 
@@ -67,33 +64,20 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// <param name="market">Market of data to process</param>
         /// <param name="dataFolderRoot">Path to the data folder</param>
         /// <param name="outputFolderRoot">Path to the output folder</param>
+        /// <param name="dataProvider">The data provider to use</param>
+        /// <param name="dataCacheProvider">The data cache provider to use</param>
+        /// <param name="historyProvider">The history provider to use</param>
         public DerivativeUniverseGenerator(DateTime processingDate, SecurityType securityType, string market, string dataFolderRoot,
-            string outputFolderRoot)
+            string outputFolderRoot, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider, IHistoryProvider historyProvider)
         {
             _processingDate = processingDate;
             _securityType = securityType;
             _market = market;
             _dataFolderRoot = dataFolderRoot;
             _outputFolderRoot = outputFolderRoot;
-
-            _dataProvider = Composer.Instance.GetExportedValueByTypeName<IDataProvider>(Config.Get("data-provider", "DefaultDataProvider"));
-
-            var mapFileProvider = Composer.Instance.GetExportedValueByTypeName<IMapFileProvider>(Config.Get("map-file-provider", "LocalZipMapFileProvider"));
-            mapFileProvider.Initialize(_dataProvider);
-
-            var factorFileProvider = Composer.Instance.GetExportedValueByTypeName<IFactorFileProvider>(Config.Get("factor-file-provider", "LocalZipFactorFileProvider"));
-            factorFileProvider.Initialize(mapFileProvider, _dataProvider);
-
-            var api = new Api.Api();
-            api.Initialize(Globals.UserId, Globals.UserToken, Globals.DataFolder);
-
-            _dataCacheProvider = new ZipDataCacheProvider(_dataProvider);
-            _historyProvider = new HistoryProviderManager();
-            var parameters = new HistoryProviderInitializeParameters(null, api, _dataProvider, _dataCacheProvider, mapFileProvider,
-                factorFileProvider, (_) => { }, true, new DataPermissionManager(), null,
-                new AlgorithmSettings() { DailyPreciseEndTime = securityType == SecurityType.IndexOption });
-            _historyProvider.Initialize(parameters);
-
+            _dataProvider = dataProvider;
+            _dataCacheProvider = dataCacheProvider;
+            _historyProvider = historyProvider;
             _marketHoursDatabase = MarketHoursDatabase.FromDataFolder();
         }
 

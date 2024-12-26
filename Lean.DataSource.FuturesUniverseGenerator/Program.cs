@@ -13,6 +13,9 @@
  * limitations under the License.
 */
 
+using QuantConnect.Interfaces;
+using QuantConnect.Lean.Engine.DataFeeds;
+using QuantConnect.Lean.Engine.HistoricalData;
 using System;
 
 namespace QuantConnect.DataSource.FuturesUniverseGenerator
@@ -34,9 +37,11 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
         }
 
         protected override DerivativeUniverseGenerator.DerivativeUniverseGenerator GetUniverseGenerator(SecurityType securityType, string market,
-            string dataFolderRoot, string outputFolderRoot, DateTime processingDate)
+            string dataFolderRoot, string outputFolderRoot, DateTime processingDate, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider,
+            HistoryProviderManager historyProvider)
         {
-            return new FuturesUniverseGenerator(processingDate, market, dataFolderRoot, outputFolderRoot);
+            return new FuturesUniverseGenerator(processingDate, market, dataFolderRoot, outputFolderRoot, dataProvider,
+                dataCacheProvider, historyProvider);
         }
     }
 }
