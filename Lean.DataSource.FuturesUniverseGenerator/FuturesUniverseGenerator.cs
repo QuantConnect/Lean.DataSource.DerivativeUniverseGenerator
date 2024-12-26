@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using QuantConnect.DataSource.DerivativeUniverseGenerator;
+using QuantConnect.Interfaces;
 
 namespace QuantConnect.DataSource.FuturesUniverseGenerator
 {
@@ -31,8 +32,13 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
         /// <param name="market">Market of data to process</param>
         /// <param name="dataFolderRoot">Path to the data folder</param>
         /// <param name="outputFolderRoot">Path to the output folder</param>
-        public FuturesUniverseGenerator(DateTime processingDate, string market, string dataFolderRoot, string outputFolderRoot)
-            : base(processingDate, SecurityType.Future, market, dataFolderRoot, outputFolderRoot)
+        /// <param name="dataProvider">The data provider to use</param>
+        /// <param name="dataCacheProvider">The data cache provider to use</param>
+        /// <param name="historyProvider">The history provider to use</param>
+        public FuturesUniverseGenerator(DateTime processingDate, string market, string dataFolderRoot, string outputFolderRoot,
+            IDataProvider dataProvider, IDataCacheProvider dataCacheProvider, IHistoryProvider historyProvider)
+            : base(processingDate, SecurityType.Future, market, dataFolderRoot, outputFolderRoot, dataProvider,
+                  dataCacheProvider, historyProvider)
         {
         }
 

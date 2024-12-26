@@ -21,6 +21,10 @@ using System;
 using QuantConnect.Configuration;
 using QuantConnect.Logging;
 using QuantConnect.Util;
+using QuantConnect.Data;
+using QuantConnect.Interfaces;
+using QuantConnect.Lean.Engine.DataFeeds;
+using QuantConnect.Lean.Engine.HistoricalData;
 
 namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 {
@@ -56,12 +60,30 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             var dateStr = Environment.GetEnvironmentVariable(DataFleetDeploymentDateEnvVariable) ?? $"{DateTime.UtcNow.Date:yyyyMMdd}";
             var processingDate = DateTime.ParseExact(dateStr, DateFormat.EightCharacter, CultureInfo.InvariantCulture);
 
+            var dataProvider = Composer.Instance.GetExportedValueByTypeName<IDataProvider>(Config.Get("data-provider", "DefaultDataProvider"));
+
+            var mapFileProvider = Composer.Instance.GetExportedValueByTypeName<IMapFileProvider>(Config.Get("map-file-provider", "LocalZipMapFileProvider"));
+            mapFileProvider.Initialize(dataProvider);
+
+            var factorFileProvider = Composer.Instance.GetExportedValueByTypeName<IFactorFileProvider>(Config.Get("factor-file-provider", "LocalZipFactorFileProvider"));
+            factorFileProvider.Initialize(mapFileProvider, dataProvider);
+            var api = new Api.Api();
+            api.Initialize(Globals.UserId, Globals.UserToken, Globals.DataFolder);
+
+            var dataCacheProvider = new ZipDataCacheProvider(dataProvider);
+            var historyProvider = new HistoryProviderManager();
+            var parameters = new HistoryProviderInitializeParameters(null, api, dataProvider, dataCacheProvider, mapFileProvider,
+                factorFileProvider, (_) => { }, true, new DataPermissionManager(), null,
+                new AlgorithmSettings() { DailyPreciseEndTime = securityType == SecurityType.IndexOption });
+            historyProvider.Initialize(parameters);
+
             var timer = new Stopwatch();
             timer.Start();
 
             foreach (var market in markets)
             {
-                var optionsUniverseGenerator = GetUniverseGenerator(securityType, market, dataFolderRoot, outputFolderRoot, processingDate);
+                var optionsUniverseGenerator = GetUniverseGenerator(securityType, market, dataFolderRoot, outputFolderRoot, processingDate,
+                    dataProvider, dataCacheProvider, historyProvider);
 
                 try
                 {
@@ -76,8 +98,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     Log.Error(ex, $"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Error generating universe.");
                     Environment.Exit(1);
                 }
-
-                Composer.Instance.Reset();
             }
 
             Log.Trace($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): DONE in {timer.Elapsed:g}");
@@ -86,7 +106,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         }
 
         protected abstract DerivativeUniverseGenerator GetUniverseGenerator(SecurityType securityType, string market, string dataFolderRoot,
-            string outputFolderRoot, DateTime processingDate);
+            string outputFolderRoot, DateTime processingDate, IDataProvider dataProvider, ZipDataCacheProvider dataCacheProvider,
+            HistoryProviderManager historyProvider);
 
         /// <summary>
         /// Validate and extract command line args and configuration options.
