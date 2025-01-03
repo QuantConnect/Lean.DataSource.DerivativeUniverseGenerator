@@ -36,31 +36,42 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
         {
         }
 
-        protected override IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution, TickType tickType)
+        protected override IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
         {
-            var tickTypeLower = tickType.TickTypeToLower();
+            var tickTypesLower = _symbolsDataTickTypes.Select(tickType => tickType.TickTypeToLower()).ToArray();
 
             if (resolution == Resolution.Minute)
             {
                 var basePath = Path.Combine(_dataSourceFolder, resolution.ResolutionToLower());
                 var dateStr = date.ToString("yyyyMMdd");
 
-                return Directory.EnumerateDirectories(basePath, "*", new EnumerationOptions() { RecurseSubdirectories = true, MaxRecursionDepth = 1 })
-                    .Select(directory => Path.Combine(directory, $"{dateStr}_{tickTypeLower}.zip"))
-                    .Where(fileName => File.Exists(fileName));
+                return Directory.EnumerateDirectories(basePath)
+                    .Select(directory => tickTypesLower
+                        .Select(tickTypeLower => Path.Combine(directory, $"{dateStr}_{tickTypeLower}.zip"))
+                        .Where(fileName => File.Exists(fileName))
+                        .FirstOrDefault())
+                    .Where(fileName => fileName != null);
             }
             // Support for resolutions higher than minute, just for Lean local repo data generation
             else
             {
                 try
                 {
-                    return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"*_{tickTypeLower}.zip")
-                        .Where(fileName =>
+                    return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"*.zip")
+                        .Select(fileName =>
                         {
                             var fileInfo = new FileInfo(fileName);
                             var fileNameParts = Path.GetFileNameWithoutExtension(fileInfo.Name).Split('_');
-                            return fileNameParts.Length == 2 && fileNameParts[1] == tickTypeLower;
-                        });
+                            var tickTypeIndex = Array.IndexOf(tickTypesLower, fileNameParts[1]);
+
+                            return (fileName, ticker: fileNameParts[0], tickTypeIndex);
+                        })
+                        // Get only supported tick type data
+                        .Where(tuple => tuple.tickTypeIndex > -1)
+                        // For each ticker get the first matching tick type file
+                        .OrderBy(tuple => tuple.tickTypeIndex)
+                        .GroupBy(tuple => tuple.ticker)
+                        .Select(group => group.First().fileName);
                 }
                 catch (DirectoryNotFoundException)
                 {
