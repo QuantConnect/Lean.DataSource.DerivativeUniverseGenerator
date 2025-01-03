@@ -35,7 +35,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected readonly SecurityType _securityType;
 
         // 99% of cases will use quote zip files to get the contracts, but in rear cases we may need to use trade zip files. e.g EUREX data
-        protected TickType[] _symbolsDataTickTypes = { TickType.Quote, TickType.OpenInterest, TickType.Trade };
+        protected TickType[] _symbolsDataTickTypes = { TickType.Quote, TickType.Trade };
 
         /// <summary>
         /// Careful: using other resolutions might introduce a look-ahead bias. For instance, if Daily resolution is used,
