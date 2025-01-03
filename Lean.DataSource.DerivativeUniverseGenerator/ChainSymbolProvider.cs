@@ -97,9 +97,9 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// <summary>
         /// Gets the zip file names for the canonical symbols where the contracts or universe constituents will be read from.
         /// </summary>
-        protected virtual IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution, TickType tickType)
+        protected virtual IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
         {
-            var tickTypeLower = tickType.TickTypeToLower();
+            var tickTypesLower = _symbolsDataTickTypes.Select(tickType => tickType.TickTypeToLower()).ToArray();
 
             if (resolution == Resolution.Minute)
             {
@@ -112,8 +112,11 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 var optionStyleLower = _securityType.DefaultOptionStyle().OptionStyleToLower();
 
                 return directories
-                    .Select(directory => Path.Combine(directory, $"{dateStr}_{tickTypeLower}_{optionStyleLower}.zip"))
-                    .Where(fileName => File.Exists(fileName));
+                    .Select(directory => tickTypesLower
+                        .Select(tickTypeLower => Path.Combine(directory, $"{dateStr}_{tickTypeLower}_{optionStyleLower}.zip"))
+                        .Where(fileName => File.Exists(fileName))
+                        .FirstOrDefault())
+                    .Where(fileName => fileName != null);
             }
             // Support for resolutions higher than minute, just for Lean local repo data generation
             else
@@ -125,35 +128,26 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                         Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()),
                         $"*{dateStr}*.zip",
                         SearchOption.AllDirectories)
-                        .Where(fileName =>
+                        .Select(fileName =>
                         {
                             var fileInfo = new FileInfo(fileName);
                             var fileNameParts = fileInfo.Name.Split('_');
-                            return fileNameParts.Length == 4 && fileNameParts[1] == dateStr && fileNameParts[2] == tickTypeLower;
-                        });
+                            var tickTypeIndex = Array.IndexOf(tickTypesLower, fileNameParts[2]);
+
+                            return (fileName, directoryName: fileInfo.DirectoryName, tickTypeIndex);
+                        })
+                        // Get only supported tick type data
+                        .Where(tuple => tuple.tickTypeIndex > -1)
+                        // For each contract get the first matching tick type file
+                        .OrderBy(tuple => tuple.tickTypeIndex)
+                        .GroupBy(tuple => tuple.directoryName)
+                        .Select(group => group.First().fileName);
                 }
                 catch (DirectoryNotFoundException)
                 {
                     return Enumerable.Empty<string>();
                 }
             }
-        }
-
-        /// <summary>
-        /// Gets the zip file names for the canonical symbols where the contracts or universe constituents will be read from.
-        /// </summary>
-        private IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
-        {
-            foreach (var tickType in _symbolsDataTickTypes)
-            {
-                var fileNames = GetZipFileNames(date, resolution, tickType).ToList();
-                if (fileNames.Count > 0)
-                {
-                    return fileNames;
-                }
-            }
-
-            return Enumerable.Empty<string>();
         }
 
         /// <summary>
