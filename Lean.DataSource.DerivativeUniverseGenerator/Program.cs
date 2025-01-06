@@ -73,8 +73,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             var dataCacheProvider = new ZipDataCacheProvider(dataProvider);
             var historyProvider = new HistoryProviderManager();
             var parameters = new HistoryProviderInitializeParameters(null, api, dataProvider, dataCacheProvider, mapFileProvider,
-                factorFileProvider, (_) => { }, true, new DataPermissionManager(), null,
-                new AlgorithmSettings() { DailyPreciseEndTime = securityType == SecurityType.IndexOption });
+                factorFileProvider, (_) => { }, true, new DataPermissionManager(), null, new AlgorithmSettings());
             historyProvider.Initialize(parameters);
 
             var timer = new Stopwatch();
