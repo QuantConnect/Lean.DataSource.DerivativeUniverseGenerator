@@ -58,6 +58,12 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             return new OptionUniverseEntry(symbol);
         }
 
+        protected override bool NeedsUnderlyingData()
+        {
+            // We don't need underlying data for future options, since they don't have greeks, so no need for underlying data for calculation
+            return _securityType != SecurityType.FutureOption;
+        }
+
         /// <summary>
         /// Adds a request for the mirror option symbol to the base list of requests.
         /// </summary>

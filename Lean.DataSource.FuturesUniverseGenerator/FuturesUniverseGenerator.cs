@@ -52,5 +52,10 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
             var symbolChainProvider = new FutureChainSymbolProvider(_dataCacheProvider, _processingDate, _securityType, _market, _dataFolderRoot);
             return symbolChainProvider.GetSymbols();
         }
+
+        protected override bool NeedsUnderlyingData()
+        {
+            return false;
+        }
     }
 }

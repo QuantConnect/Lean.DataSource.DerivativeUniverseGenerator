@@ -161,7 +161,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                         var underlyingEntryGenerated = TryGenerateAndWriteUnderlyingLine(underlyingSymbol, underlyingMarketHoursEntry, writer,
                             out underlyingEntry, out underlyingHistory);
                         // Underlying not mapped or missing data, so just skip them. Unless FOPs which don't have greeks, don't need the underlying data
-                        if (!underlyingEntryGenerated && _securityType != SecurityType.FutureOption)
+                        if (!underlyingEntryGenerated && NeedsUnderlyingData())
                         {
                             Interlocked.Increment(ref underlyingsWithMissingData);
                             Log.Error($"DerivativeUniverseGenerator.GenerateUniverses(): " +
@@ -389,5 +389,12 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// Factory method to create an instance of <see cref="IDerivativeUniverseFileEntry"/> for the given <paramref name="symbol"/>
         /// </summary>
         protected abstract IDerivativeUniverseFileEntry CreateUniverseEntry(Symbol symbol);
+
+        /// <summary>
+        /// Whether the derivative lines generation requires underlying data.
+        /// If true and the underlying entry has no market data, the derivative entries will be skipped.
+        /// </summary>
+        /// <returns></returns>
+        protected abstract bool NeedsUnderlyingData();
     }
 }
