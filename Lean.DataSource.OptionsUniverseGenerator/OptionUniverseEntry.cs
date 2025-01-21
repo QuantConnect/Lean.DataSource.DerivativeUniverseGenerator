@@ -89,7 +89,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// </summary>
         public override string GetHeader()
         {
-            return OptionUniverse.CsvHeader;
+            return OptionUniverse.CsvHeader(Symbol.SecurityType);
         }
 
         /// <summary>
