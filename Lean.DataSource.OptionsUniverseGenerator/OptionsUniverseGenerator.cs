@@ -58,6 +58,12 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             return new OptionUniverseEntry(symbol);
         }
 
+        protected override bool NeedsUnderlyingData()
+        {
+            // We don't need underlying data for future options, since they don't have greeks, so no need for underlying data for calculation
+            return OptionUniverseEntry.HasGreeks(_securityType);
+        }
+
         /// <summary>
         /// Adds a request for the mirror option symbol to the base list of requests.
         /// </summary>
@@ -79,7 +85,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         {
             var generatedEntries = base.GenerateDerivativeEntries(canonicalSymbol, symbols, marketHoursEntry, underlyingHistory, underlyingEntry);
 
-            if (!OptionUniverseEntry.HasGreeks(canonicalSymbol))
+            if (!OptionUniverseEntry.HasGreeks(canonicalSymbol.SecurityType))
             {
                 return generatedEntries;
             }

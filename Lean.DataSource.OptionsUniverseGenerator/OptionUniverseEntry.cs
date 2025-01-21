@@ -46,7 +46,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         {
             // Options universes contain a line for the underlying: we don't need greeks for it.
             // Future options don't have greeks either.
-            if (HasGreeks(symbol))
+            if (HasGreeks(symbol.SecurityType))
             {
                 var mirrorOptionSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
                 _greeksIndicators = new GreeksIndicators(symbol, mirrorOptionSymbol);
@@ -104,9 +104,9 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// <summary>
         /// Returns true if the symbol has greeks.
         /// </summary>
-        public static bool HasGreeks(Symbol symbol)
+        public static bool HasGreeks(SecurityType securityType)
         {
-            return symbol.SecurityType.IsOption() && symbol.SecurityType != SecurityType.FutureOption;
+            return securityType.IsOption() && securityType != SecurityType.FutureOption;
         }
     }
 }

@@ -158,17 +158,17 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
                     if (underlyingSymbol is not null)
                     {
-                    var underlyingEntryGenerated = TryGenerateAndWriteUnderlyingLine(underlyingSymbol, underlyingMarketHoursEntry, writer,
+                        var underlyingEntryGenerated = TryGenerateAndWriteUnderlyingLine(underlyingSymbol, underlyingMarketHoursEntry, writer,
                             out underlyingEntry, out underlyingHistory);
-                    // Underlying not mapped or missing data, so just skip them
-                    if (!underlyingEntryGenerated)
-                    {
-                        Interlocked.Increment(ref underlyingsWithMissingData);
-                        Log.Error($"DerivativeUniverseGenerator.GenerateUniverses(): " +
-                            $"Underlying data missing for {underlyingSymbol} on {_processingDate:yyyy/MM/dd}, universe file will not be generated.");
-                        UpdateEta(ref symbolCounter, totalContracts, start, contractsSymbols.Count);
-                        return;
-                    }
+                        // Underlying not mapped or missing data, so just skip them. Unless FOPs which don't have greeks, don't need the underlying data
+                        if (!underlyingEntryGenerated && NeedsUnderlyingData())
+                        {
+                            Interlocked.Increment(ref underlyingsWithMissingData);
+                            Log.Error($"DerivativeUniverseGenerator.GenerateUniverses(): " +
+                                $"Underlying data missing for {underlyingSymbol} on {_processingDate:yyyy/MM/dd}, universe file will not be generated.");
+                            UpdateEta(ref symbolCounter, totalContracts, start, contractsSymbols.Count);
+                            return;
+                        }
                     }
 
                     var derivativeEntries = GenerateDerivativeEntries(canonicalSymbol, contractsSymbols, derivativeMarketHoursEntry,
@@ -389,5 +389,12 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// Factory method to create an instance of <see cref="IDerivativeUniverseFileEntry"/> for the given <paramref name="symbol"/>
         /// </summary>
         protected abstract IDerivativeUniverseFileEntry CreateUniverseEntry(Symbol symbol);
+
+        /// <summary>
+        /// Whether the derivative lines generation requires underlying data.
+        /// If true and the underlying entry has no market data, the derivative entries will be skipped.
+        /// </summary>
+        /// <returns></returns>
+        protected abstract bool NeedsUnderlyingData();
     }
 }
