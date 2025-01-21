@@ -85,7 +85,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         {
             var generatedEntries = base.GenerateDerivativeEntries(canonicalSymbol, symbols, marketHoursEntry, underlyingHistory, underlyingEntry);
 
-            if (!OptionUniverseEntry.HasGreeks(canonicalSymbol))
+            if (!OptionUniverseEntry.HasGreeks(canonicalSymbol.SecurityType))
             {
                 return generatedEntries;
             }
