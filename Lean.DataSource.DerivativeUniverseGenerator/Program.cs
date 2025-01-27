@@ -25,6 +25,8 @@ using QuantConnect.Data;
 using QuantConnect.Interfaces;
 using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Lean.Engine.HistoricalData;
+using Newtonsoft.Json;
+using System.Collections.Generic;
 
 namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 {
@@ -52,6 +54,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         {
             Initialize(args, out var securityType, out var markets, out var dataFolderRoot, out var outputFolderRoot,
                 argNamesToIgnore ?? Array.Empty<string>());
+
+            var symbolsStr = Config.Get("symbols", "[]");
+            var symbols = JsonConvert.DeserializeObject<string[]>(symbolsStr);
+            DerivativeUniverseGenerator.SetSymbolsToProcess(symbols);
 
             Log.Trace($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): " +
                 $"Security type: {securityType}. Markets: {string.Join(", ", markets)}. Data folder: {dataFolderRoot}. Output folder: {outputFolderRoot}");
@@ -81,12 +87,12 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             foreach (var market in markets)
             {
-                var optionsUniverseGenerator = GetUniverseGenerator(securityType, market, dataFolderRoot, outputFolderRoot, processingDate,
+                var universeGenerator = GetUniverseGenerator(securityType, market, dataFolderRoot, outputFolderRoot, processingDate,
                     dataProvider, dataCacheProvider, historyProvider);
 
                 try
                 {
-                    if (!optionsUniverseGenerator.Run())
+                    if (!universeGenerator.Run())
                     {
                         Log.Error($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Failed to generate universe.");
                         Environment.Exit(1);

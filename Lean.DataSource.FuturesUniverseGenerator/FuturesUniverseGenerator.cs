@@ -15,8 +15,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using QuantConnect.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Interfaces;
+using QuantConnect.Util;
 
 namespace QuantConnect.DataSource.FuturesUniverseGenerator
 {
@@ -56,6 +58,17 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
         protected override bool NeedsUnderlyingData()
         {
             return false;
+        }
+
+        protected override Dictionary<Symbol, List<Symbol>> FilterSymbols(Dictionary<Symbol, List<Symbol>> symbols,
+            HashSet<string> symbolsToProcess)
+        {
+            if (symbolsToProcess.IsNullOrEmpty())
+            {
+                return symbols;
+            }
+
+            return symbols.Where(kvp => symbolsToProcess.Contains(kvp.Key.Value.Replace("/", ""))).ToDictionary();
         }
     }
 }

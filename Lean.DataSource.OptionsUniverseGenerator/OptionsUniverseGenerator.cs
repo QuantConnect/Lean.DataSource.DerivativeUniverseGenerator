@@ -64,6 +64,22 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             return OptionUniverseEntry.HasGreeks(_securityType);
         }
 
+        protected override Dictionary<Symbol, List<Symbol>> FilterSymbols(Dictionary<Symbol, List<Symbol>> symbols,
+            HashSet<string> symbolsToProcess)
+        {
+            if (symbolsToProcess.IsNullOrEmpty())
+            {
+                return symbols;
+            }
+
+            if (_securityType == SecurityType.FutureOption)
+            {
+                return symbols.Where(kvp => symbolsToProcess.Contains(kvp.Key.Underlying.Canonical.Value.Replace("/", ""))).ToDictionary();
+            }
+
+            return symbols.Where(kvp => symbolsToProcess.Contains(kvp.Key.Underlying.Value)).ToDictionary();
+        }
+
         /// <summary>
         /// Adds a request for the mirror option symbol to the base list of requests.
         /// </summary>

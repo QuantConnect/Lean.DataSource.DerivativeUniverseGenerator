@@ -57,6 +57,12 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         private readonly int _historyBarCount = 1;
 
         /// <summary>
+        /// Symbols to process.
+        /// If null or empty, all found symbols will be processed.
+        /// </summary>
+        private static HashSet<string> _symbolsToProcess;
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="DerivativeUniverseGenerator" /> class.
         /// </summary>
         /// <param name="processingDate">The processing date</param>
@@ -90,7 +96,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             try
             {
-                var symbols = GetSymbols();
+                var symbols = GetSymbolsToProcess();
                 Log.Trace($"DerivativeUniverseGenerator.Run(): found {symbols.Count} underlying symbols with {symbols.Sum(x => x.Value.Count)} derivative symbols");
                 return GenerateUniverses(symbols);
             }
@@ -105,11 +111,24 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// <summary>
         /// Gets the available universe symbols grouped by their canonical symbol.
         /// </summary>
+        private Dictionary<Symbol, List<Symbol>> GetSymbolsToProcess()
+        {
+            return FilterSymbols(GetSymbols(), _symbolsToProcess);
+        }
+
+        /// <summary>
+        /// Gets the available universe symbols grouped by their canonical symbol.
+        /// </summary>
         protected virtual Dictionary<Symbol, List<Symbol>> GetSymbols()
         {
             var symbolChainProvider = new ChainSymbolProvider(_dataCacheProvider, _processingDate, _securityType, _market, _dataFolderRoot);
             return symbolChainProvider.GetSymbols();
         }
+
+        /// <summary>
+        /// Filters the symbols to process based on the given list of symbols.
+        /// </summary>
+        protected abstract Dictionary<Symbol, List<Symbol>> FilterSymbols(Dictionary<Symbol, List<Symbol>> symbols, HashSet<string> symbolsToProcess);
 
         /// <summary>
         /// Generates the universes for each given canonical symbol and its constituents (options, future contracts, etc).
@@ -396,5 +415,13 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// </summary>
         /// <returns></returns>
         protected abstract bool NeedsUnderlyingData();
+
+        /// <summary>
+        /// Sets the symbols to process.
+        /// </summary>
+        public static void SetSymbolsToProcess(IEnumerable<string> symbols)
+        {
+            _symbolsToProcess = new HashSet<string>(symbols, StringComparer.InvariantCultureIgnoreCase);
+        }
     }
 }
