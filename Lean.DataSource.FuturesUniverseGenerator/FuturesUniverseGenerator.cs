@@ -61,7 +61,7 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
         }
 
         protected override Dictionary<Symbol, List<Symbol>> FilterSymbols(Dictionary<Symbol, List<Symbol>> symbols,
-            string[] symbolsToProcess)
+            HashSet<string> symbolsToProcess)
         {
             if (symbolsToProcess.IsNullOrEmpty())
             {

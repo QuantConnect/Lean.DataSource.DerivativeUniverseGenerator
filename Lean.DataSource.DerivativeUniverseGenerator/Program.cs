@@ -26,6 +26,7 @@ using QuantConnect.Interfaces;
 using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Lean.Engine.HistoricalData;
 using Newtonsoft.Json;
+using System.Collections.Generic;
 
 namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 {
@@ -56,8 +57,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             var symbolsStr = Config.Get("symbols", "[]");
             var symbols = JsonConvert.DeserializeObject<string[]>(symbolsStr);
-            // Using this property since this is for internal usage only
-            DerivativeUniverseGenerator.SymbolsToProcess = symbols;
+            DerivativeUniverseGenerator.SetSymbolsToProcess(symbols);
 
             Log.Trace($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): " +
                 $"Security type: {securityType}. Markets: {string.Join(", ", markets)}. Data folder: {dataFolderRoot}. Output folder: {outputFolderRoot}");
