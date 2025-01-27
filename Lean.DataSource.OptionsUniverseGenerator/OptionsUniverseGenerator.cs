@@ -38,14 +38,16 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// <param name="processingDate">The processing date</param>
         /// <param name="securityType">Option security type to process</param>
         /// <param name="market">Market of data to process</param>
+        /// <param name="symbolsToProcess">Symbols to process.
+        /// If null or empty, all symbols found will be processed</param>
         /// <param name="dataFolderRoot">Path to the data folder</param>
         /// <param name="outputFolderRoot">Path to the output folder</param>
         /// <param name="dataProvider">The data provider to use</param>
         /// <param name="dataCacheProvider">The data cache provider to use</param>
         /// <param name="historyProvider">The history provider to use</param>
-        public OptionsUniverseGenerator(DateTime processingDate, SecurityType securityType, string market, string dataFolderRoot,
+        public OptionsUniverseGenerator(DateTime processingDate, SecurityType securityType, string market, string[] symbolsToProcess, string dataFolderRoot,
             string outputFolderRoot, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider, IHistoryProvider historyProvider)
-            : base(processingDate, securityType, market, dataFolderRoot, outputFolderRoot, dataProvider, dataCacheProvider, historyProvider)
+            : base(processingDate, securityType, market, symbolsToProcess, dataFolderRoot, outputFolderRoot, dataProvider, dataCacheProvider, historyProvider)
         {
             if (!_supportedSecurityTypes.Contains(securityType))
             {
@@ -62,6 +64,22 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         {
             // We don't need underlying data for future options, since they don't have greeks, so no need for underlying data for calculation
             return OptionUniverseEntry.HasGreeks(_securityType);
+        }
+
+        protected override Dictionary<Symbol, List<Symbol>> FilterSymbols(Dictionary<Symbol, List<Symbol>> symbols,
+            string[] symbolsToProcess)
+        {
+            if (symbolsToProcess.IsNullOrEmpty())
+            {
+                return symbols;
+            }
+
+            if (_securityType == SecurityType.FutureOption)
+            {
+                return symbols.Where(kvp => symbolsToProcess.Contains(kvp.Key.Underlying.Canonical.Value.Replace("/", ""))).ToDictionary();
+            }
+
+            return symbols.Where(kvp => symbolsToProcess.Contains(kvp.Key.Underlying.Value)).ToDictionary();
         }
 
         /// <summary>

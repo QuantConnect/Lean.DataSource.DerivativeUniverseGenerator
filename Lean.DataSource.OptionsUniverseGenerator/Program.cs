@@ -14,7 +14,6 @@
 */
 
 using QuantConnect.Interfaces;
-using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Lean.Engine.HistoricalData;
 using System;
 
@@ -37,12 +36,19 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             program.MainImpl(args);
         }
 
-        protected override DerivativeUniverseGenerator.DerivativeUniverseGenerator GetUniverseGenerator(SecurityType securityType, string market,
-            string dataFolderRoot, string outputFolderRoot, DateTime processingDate, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider,
+        protected override DerivativeUniverseGenerator.DerivativeUniverseGenerator GetUniverseGenerator(
+            SecurityType securityType,
+            string market,
+            string[] symbolsToProcess,
+            string dataFolderRoot,
+            string outputFolderRoot,
+            DateTime processingDate,
+            IDataProvider dataProvider,
+            IDataCacheProvider dataCacheProvider,
             HistoryProviderManager historyProvider)
         {
-            return new OptionsUniverseGenerator(processingDate, securityType, market, dataFolderRoot, outputFolderRoot,
-                dataProvider, dataCacheProvider, historyProvider);
+            return new OptionsUniverseGenerator(processingDate, securityType, market, symbolsToProcess,
+                dataFolderRoot, outputFolderRoot, dataProvider, dataCacheProvider, historyProvider);
         }
     }
 }

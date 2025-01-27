@@ -1,4 +1,5 @@
 {
 	"data-folder": "../../../Data/",
-	"history-provider": [ "SubscriptionDataReaderHistoryProvider" ]
+	"history-provider": [ "SubscriptionDataReaderHistoryProvider" ],
+	"symbols": []
 }
