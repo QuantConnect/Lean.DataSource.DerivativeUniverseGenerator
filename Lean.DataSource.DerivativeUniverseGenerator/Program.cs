@@ -52,7 +52,12 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected virtual void MainImpl(string[] args, string[] argNamesToIgnore = null)
         {
             Initialize(args, out var securityType, out var markets, out var dataFolderRoot, out var outputFolderRoot,
-                out var symbolsToProcess, argNamesToIgnore ?? Array.Empty<string>());
+                argNamesToIgnore ?? Array.Empty<string>());
+
+            var symbolsStr = Config.Get("symbols", "[]");
+            var symbols = JsonConvert.DeserializeObject<string[]>(symbolsStr);
+            // Using this property since this is for internal usage only
+            DerivativeUniverseGenerator.SymbolsToProcess = symbols;
 
             Log.Trace($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): " +
                 $"Security type: {securityType}. Markets: {string.Join(", ", markets)}. Data folder: {dataFolderRoot}. Output folder: {outputFolderRoot}");
@@ -82,12 +87,12 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             foreach (var market in markets)
             {
-                var optionsUniverseGenerator = GetUniverseGenerator(securityType, market, symbolsToProcess, dataFolderRoot,
-                    outputFolderRoot, processingDate, dataProvider, dataCacheProvider, historyProvider);
+                var universeGenerator = GetUniverseGenerator(securityType, market, dataFolderRoot, outputFolderRoot, processingDate,
+                    dataProvider, dataCacheProvider, historyProvider);
 
                 try
                 {
-                    if (!optionsUniverseGenerator.Run())
+                    if (!universeGenerator.Run())
                     {
                         Log.Error($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Failed to generate universe.");
                         Environment.Exit(1);
@@ -105,22 +110,15 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             Environment.Exit(0);
         }
 
-        protected abstract DerivativeUniverseGenerator GetUniverseGenerator(
-            SecurityType securityType,
-            string market,
-            string[] symbolsToProcess,
-            string dataFolderRoot,
-            string outputFolderRoot,
-            DateTime processingDate,
-            IDataProvider dataProvider,
-            IDataCacheProvider dataCacheProvider,
+        protected abstract DerivativeUniverseGenerator GetUniverseGenerator(SecurityType securityType, string market, string dataFolderRoot,
+            string outputFolderRoot, DateTime processingDate, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider,
             HistoryProviderManager historyProvider);
 
         /// <summary>
         /// Validate and extract command line args and configuration options.
         /// </summary>
         protected virtual void Initialize(string[] args, out SecurityType securityType, out string[] markets, out string dataFolderRoot,
-            out string outputFolderRoot, out string[] symbols, string[] argNamesToIgnore)
+            out string outputFolderRoot, string[] argNamesToIgnore)
         {
             var argsData = args.Select(x => x.Split('=')).ToDictionary(x => x[0], x => x.Length > 1 ? x[1] : null);
 
@@ -155,9 +153,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             // TODO: Should we set the "data-folder" config to "processed-data-directory"?
             dataFolderRoot = Config.Get("processed-data-directory", Globals.DataFolder);
             outputFolderRoot = Config.Get("temp-output-folder", "/temp-output-directory");
-
-            var symbolsStr = Config.Get("symbols", "[]");
-            symbols = JsonConvert.DeserializeObject<string[]>(symbolsStr);
         }
     }
 }

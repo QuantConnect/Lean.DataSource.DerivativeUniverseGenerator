@@ -38,7 +38,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected readonly DateTime _processingDate;
         protected readonly SecurityType _securityType;
         protected readonly string _market;
-        protected readonly string[] _symbolsToProcess;
         protected readonly string _dataFolderRoot;
         protected readonly string _outputFolderRoot;
 
@@ -58,25 +57,28 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         private readonly int _historyBarCount = 1;
 
         /// <summary>
+        /// Symbols to process.
+        /// If null or empty, all found symbols will be processed.
+        /// </summary>
+        public static string[] SymbolsToProcess { get; set; }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="DerivativeUniverseGenerator" /> class.
         /// </summary>
         /// <param name="processingDate">The processing date</param>
         /// <param name="securityType">Derivative security type to process</param>
         /// <param name="market">Market of data to process</param>
-        /// <param name="symbolsToProcess">Symbols to process.
-        /// If null or empty, all symbols found will be processed</param>
         /// <param name="dataFolderRoot">Path to the data folder</param>
         /// <param name="outputFolderRoot">Path to the output folder</param>
         /// <param name="dataProvider">The data provider to use</param>
         /// <param name="dataCacheProvider">The data cache provider to use</param>
         /// <param name="historyProvider">The history provider to use</param>
-        public DerivativeUniverseGenerator(DateTime processingDate, SecurityType securityType, string market, string[] symbolsToProcess,
-            string dataFolderRoot,string outputFolderRoot, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider, IHistoryProvider historyProvider)
+        public DerivativeUniverseGenerator(DateTime processingDate, SecurityType securityType, string market, string dataFolderRoot,
+            string outputFolderRoot, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider, IHistoryProvider historyProvider)
         {
             _processingDate = processingDate;
             _securityType = securityType;
             _market = market;
-            _symbolsToProcess = symbolsToProcess;
             _dataFolderRoot = dataFolderRoot;
             _outputFolderRoot = outputFolderRoot;
             _dataProvider = dataProvider;
@@ -111,7 +113,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// </summary>
         private Dictionary<Symbol, List<Symbol>> GetSymbolsToProcess()
         {
-            return FilterSymbols(GetSymbols(), _symbolsToProcess);
+            return FilterSymbols(GetSymbols(), SymbolsToProcess);
         }
 
         /// <summary>

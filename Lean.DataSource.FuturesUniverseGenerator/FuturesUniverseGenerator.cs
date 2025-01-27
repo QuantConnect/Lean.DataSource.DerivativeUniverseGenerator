@@ -32,17 +32,14 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
         /// </summary>
         /// <param name="processingDate">The processing date</param>
         /// <param name="market">Market of data to process</param>
-        /// <param name="symbolsToProcess">Symbols to process.
-        /// If null or empty, all symbols found will be processed</param>
         /// <param name="dataFolderRoot">Path to the data folder</param>
         /// <param name="outputFolderRoot">Path to the output folder</param>
         /// <param name="dataProvider">The data provider to use</param>
         /// <param name="dataCacheProvider">The data cache provider to use</param>
         /// <param name="historyProvider">The history provider to use</param>
-        public FuturesUniverseGenerator(DateTime processingDate, string market, string[] symbolsToProcess,
-            string dataFolderRoot, string outputFolderRoot, IDataProvider dataProvider,
-            IDataCacheProvider dataCacheProvider, IHistoryProvider historyProvider)
-            : base(processingDate, SecurityType.Future, market, symbolsToProcess, dataFolderRoot, outputFolderRoot, dataProvider,
+        public FuturesUniverseGenerator(DateTime processingDate, string market, string dataFolderRoot, string outputFolderRoot,
+            IDataProvider dataProvider, IDataCacheProvider dataCacheProvider, IHistoryProvider historyProvider)
+            : base(processingDate, SecurityType.Future, market, dataFolderRoot, outputFolderRoot, dataProvider,
                   dataCacheProvider, historyProvider)
         {
         }
