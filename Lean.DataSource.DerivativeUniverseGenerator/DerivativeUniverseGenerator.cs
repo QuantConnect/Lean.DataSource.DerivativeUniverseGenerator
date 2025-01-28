@@ -113,7 +113,25 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// </summary>
         private Dictionary<Symbol, List<Symbol>> GetSymbolsToProcess()
         {
-            return FilterSymbols(GetSymbols(), _symbolsToProcess);
+            Dictionary<Symbol, List<Symbol>> symbols;
+            try
+            {
+                symbols = GetSymbols();
+            }
+            catch
+            {
+                var exchangeHours = _marketHoursDatabase.GetExchangeHours(_market, null, _securityType);
+                if (exchangeHours.IsDateOpen(_processingDate))
+                {
+                    // No data found even though the market is open, rethrow the exception to fail the process
+                    throw;
+                }
+
+                // No data found but the market is closed, just return an empty dictionary to skip the process
+                symbols = new Dictionary<Symbol, List<Symbol>>();
+            }
+
+            return FilterSymbols(symbols, _symbolsToProcess);
         }
 
         /// <summary>
