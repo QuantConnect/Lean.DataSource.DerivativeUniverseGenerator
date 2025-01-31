@@ -69,14 +69,12 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
 
         public void Update(IBaseDataBar data)
         {
-            var point = new IndicatorDataPoint(data.Symbol, data.EndTime, data.Close);
-
-            _iv.Update(point);
-            _delta.Update(point);
-            _gamma.Update(point);
-            _vega.Update(point);
-            _theta.Update(point);
-            _rho.Update(point);
+            _iv.Update(data);
+            _delta.Update(data);
+            _gamma.Update(data);
+            _vega.Update(data);
+            _theta.Update(data);
+            _rho.Update(data);
         }
 
         public Greeks GetGreeks()
