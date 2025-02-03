@@ -105,20 +105,9 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                     dividend, option.ID.OptionRight);
             }
 
-            greeksIndicators.Update(new QuoteBar
-            {
-                Symbol = option.Underlying,
-                EndTime = _referenceDate,
-                Bid = new Bar { Close = _underlyingPrice },
-                Ask = null
-            });
-            greeksIndicators.Update(new QuoteBar
-            {
-                Symbol = option,
-                EndTime = _referenceDate,
-                Bid = new Bar { Close = Convert.ToDecimal(optionPrice) },
-                Ask = null
-            });
+            var time = _referenceDate.AddDays(-1);
+            greeksIndicators.Update(new QuoteBar(time, option.Underlying, new Bar { Close = _underlyingPrice }, 0, null, 0, Time.OneDay));
+            greeksIndicators.Update(new QuoteBar(time, option, new Bar { Close = Convert.ToDecimal(optionPrice) }, 0, null, 0, Time.OneDay));
 
             return greeksIndicators;
         }
