@@ -4,7 +4,6 @@
 		<TargetFramework>net9.0</TargetFramework>
 		<AssemblyName>QuantConnect.DataSource.OptionsUniverseGenerator</AssemblyName>
 		<AssemblyTitle>QuantConnect.DataSource.OptionsUniverseGenerator</AssemblyTitle>
-		<AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
 		<Product>QuantConnect.DataSource.OptionsUniverseGenerator</Product>
 		<Copyright>Copyright © 2024</Copyright>
 		<PlatformTarget>AnyCPU</PlatformTarget>
