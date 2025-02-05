@@ -161,8 +161,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                     var indexPrices = JsonConvert.DeserializeObject<YahooFinanceIndexPrices>(content);
                     if (indexPrices == null)
                     {
-                        Log.Error($"IndexHistoryProvider.GetHistory(): Failed to deserialize response for {symbol}." +
-                            $"Response: {content}");
+                        Log.Error($"IndexHistoryProvider.GetHistory(): Failed to deserialize response for {symbol}.");
                         continue;
                     }
                     return ParseHistory(request.Symbol, indexPrices, request.ExchangeHours);
