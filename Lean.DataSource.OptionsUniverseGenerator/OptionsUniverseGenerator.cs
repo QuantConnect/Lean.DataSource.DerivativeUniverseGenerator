@@ -122,14 +122,18 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             if (entriesWithMissingIv.Count > 0)
             {
                 // Interpolate missing IVs and re-generate greeks
-                var ivInterpolator = ImpliedVolatilityInterpolator.Create(_processingDate, entries, (underlyingEntry as OptionUniverseEntry).Close,
-                    entries.Count - entriesWithMissingIv.Count);
-
-                if (ivInterpolator == null)
+                ImpliedVolatilityInterpolator ivInterpolator = null;
+                try
                 {
-                    Log.Error($"Failed to set up IV interpolator for {canonicalSymbol}.");
+                    ivInterpolator = ImpliedVolatilityInterpolator.Create(_processingDate, entries,
+                        (underlyingEntry as OptionUniverseEntry).Close, entries.Count - entriesWithMissingIv.Count);
                 }
-                else
+                catch (Exception e)
+                {
+                    Log.Error($"Failed to set up IV interpolator for {canonicalSymbol}. Error: {e.GetType()}: {e}");
+                }
+
+                if (ivInterpolator != null)
                 {
                     var failedInterpolationsCount = 0;
                     foreach (var entry in entriesWithMissingIv)
