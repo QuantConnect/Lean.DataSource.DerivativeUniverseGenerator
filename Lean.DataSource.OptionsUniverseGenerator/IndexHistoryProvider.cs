@@ -197,7 +197,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 var close = indexPrices.ClosePrices[i];
                 var volume = indexPrices.Volumes[i];
 
-                if (open == 0 || high == 0 || low == 0 || close == 0 || volume == 0)
+                if (open == 0 || high == 0 || low == 0 || close == 0)
                 {
                     throw new Exception($"IndexHistoryProvider.ParseHistory(): Invalid data for {symbol} at {time}. " +
                         $"Open: {open}, High: {high}, Low: {low}, Close: {close}, Volume: {volume}.");
