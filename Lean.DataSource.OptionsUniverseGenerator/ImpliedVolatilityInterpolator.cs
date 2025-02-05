@@ -123,14 +123,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         public static ImpliedVolatilityInterpolator Create(DateTime referenceDate, List<OptionUniverseEntry> entries, decimal underlyingPrice,
             int numberOfEntriesWithValidIv)
         {
-            try
-            {
-                return new ImpliedVolatilityInterpolator(referenceDate, entries, underlyingPrice, numberOfEntriesWithValidIv);
-            }
-            catch
-            {
-                return null;
-            }
+            return new ImpliedVolatilityInterpolator(referenceDate, entries, underlyingPrice, numberOfEntriesWithValidIv);
         }
 
         /// <summary>

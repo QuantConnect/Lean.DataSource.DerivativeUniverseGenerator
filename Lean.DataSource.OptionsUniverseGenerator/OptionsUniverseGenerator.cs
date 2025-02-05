@@ -122,14 +122,18 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             if (entriesWithMissingIv.Count > 0)
             {
                 // Interpolate missing IVs and re-generate greeks
-                var ivInterpolator = ImpliedVolatilityInterpolator.Create(_processingDate, entries, (underlyingEntry as OptionUniverseEntry).Close,
-                    entries.Count - entriesWithMissingIv.Count);
-
-                if (ivInterpolator == null)
+                ImpliedVolatilityInterpolator ivInterpolator = null;
+                try
                 {
-                    Log.Error($"Failed to set up IV interpolator for {canonicalSymbol}.");
+                    ivInterpolator = ImpliedVolatilityInterpolator.Create(_processingDate, entries,
+                        (underlyingEntry as OptionUniverseEntry).Close, entries.Count - entriesWithMissingIv.Count);
                 }
-                else
+                catch (Exception e)
+                {
+                    Log.Error($"Failed to set up IV interpolator for {canonicalSymbol}. Error: {e.GetType()}: {e}");
+                }
+
+                if (ivInterpolator != null)
                 {
                     var failedInterpolationsCount = 0;
                     foreach (var entry in entriesWithMissingIv)
@@ -160,6 +164,35 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             }
 
             return entries;
+        }
+
+        private int _missingIvLogCount;
+
+        /// <remarks>
+        /// Overridden just for logging failed IV calculations in debug mode
+        /// </remarks>
+        protected override IDerivativeUniverseFileEntry GenerateDerivativeEntry(Symbol symbol, List<Slice> history, List<Slice> underlyingHistory)
+        {
+            var entry = base.GenerateDerivativeEntry(symbol, history, underlyingHistory);
+
+            if (Log.DebuggingEnabled &&
+                entry is OptionUniverseEntry optionEntry &&
+                optionEntry.ImpliedVolatility.HasValue &&
+                optionEntry.ImpliedVolatility.Value == 0 &&
+                _missingIvLogCount++ < 20)
+            {
+                var underlyingPrice = underlyingHistory.LastOrDefault(x => x.Bars.ContainsKey(symbol.Underlying))?.Bars?.GetValue(symbol.Underlying);
+                var optionPrice = history.LastOrDefault(x => x.QuoteBars.ContainsKey(symbol))?.QuoteBars?.GetValue(symbol);
+                var mirrorSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
+                var mirrorPrice = history.LastOrDefault(x => x.QuoteBars.ContainsKey(mirrorSymbol))?.QuoteBars?.GetValue(mirrorSymbol);
+
+                Log.Debug($"OptionsUniverseGenerator.GenerateDerivativeEntry(): IV is 0 for {symbol}.\n" +
+                    $"Underlying price: {underlyingPrice?.Time} - {underlyingPrice?.EndTime} :: {underlyingPrice}\n" +
+                    $"Option price: {optionPrice?.Time} - {optionPrice?.EndTime} :: {optionPrice}\n" +
+                    $"Mirror option price: {mirrorPrice?.Time} - {mirrorPrice?.EndTime} :: {mirrorPrice}");
+            }
+
+            return entry;
         }
     }
 }
