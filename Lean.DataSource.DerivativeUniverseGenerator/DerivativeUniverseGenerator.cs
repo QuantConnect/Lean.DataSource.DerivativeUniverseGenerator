@@ -287,7 +287,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 PriceHistoryResolutions[0],
                 marketHoursEntry.ExchangeHours,
                 marketHoursEntry.DataTimeZone,
-                PriceHistoryResolutions[0],
+                null,
                 includeExtendedMarketHours: false,
                 isCustomData: false,
                 DataNormalizationMode.ScaledRaw,
@@ -325,7 +325,6 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 {
                     var request = new HistoryRequest(x, x.Symbol, historyStartUtc, historyEndUtc);
                     request.Resolution = resolution;
-                    request.FillForwardResolution = resolution;
                     return request;
                 }).ToArray();
 
@@ -397,7 +396,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 PriceHistoryResolutions[0],
                 marketHoursEntry.ExchangeHours,
                 marketHoursEntry.DataTimeZone,
-                PriceHistoryResolutions[0],
+                null,
                 includeExtendedMarketHours: false,
                 isCustomData: false,
                 DataNormalizationMode.ScaledRaw,
