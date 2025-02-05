@@ -181,7 +181,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 optionEntry.ImpliedVolatility.Value == 0 &&
                 _missingIvLogCount++ < 20)
             {
-                var underlyingPrice = underlyingHistory.LastOrDefault(x => x.Bars.ContainsKey(symbol.Underlying))?.QuoteBars?.GetValue(symbol.Underlying);
+                var underlyingPrice = underlyingHistory.LastOrDefault(x => x.Bars.ContainsKey(symbol.Underlying))?.Bars?.GetValue(symbol.Underlying);
                 var optionPrice = history.LastOrDefault(x => x.QuoteBars.ContainsKey(symbol))?.QuoteBars?.GetValue(symbol);
                 var mirrorSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
                 var mirrorPrice = history.LastOrDefault(x => x.QuoteBars.ContainsKey(mirrorSymbol))?.QuoteBars?.GetValue(mirrorSymbol);
