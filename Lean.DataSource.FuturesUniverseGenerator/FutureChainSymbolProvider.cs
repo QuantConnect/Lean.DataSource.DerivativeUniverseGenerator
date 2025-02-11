@@ -17,6 +17,7 @@ using QuantConnect.Configuration;
 using QuantConnect.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Interfaces;
 using QuantConnect.Securities;
+using QuantConnect.Securities.Future;
 using QuantConnect.Util;
 using System;
 using System.Collections.Generic;
@@ -30,9 +31,8 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
     /// </summary>
     public class FutureChainSymbolProvider : ChainSymbolProvider
     {
-        private static readonly Symbol VIX = Symbol.Create(Futures.Indices.VIX, SecurityType.Future, Market.CFE);
-
-        private readonly IFutureChainProvider _vixFuturesChainProvider;
+        private readonly IFutureChainProvider _futuresChainProvider;
+        private readonly string _market;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="FutureChainSymbolProvider"/> class
@@ -41,11 +41,12 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
             string market, string dataFolderRoot)
             : base(dataCacheProvider, processingDate, securityType, market, dataFolderRoot)
         {
-            if (market == Market.CFE &&
-                Config.TryGetValue<string>("vix-futures-chain-provider", out var futuresChainProviderStr) &&
+            _market = market;
+
+            if (Config.TryGetValue<string>("futures-chain-provider", out var futuresChainProviderStr) &&
                 !string.IsNullOrEmpty(futuresChainProviderStr))
             {
-                _vixFuturesChainProvider = Composer.Instance.GetExportedValueByTypeName<IFutureChainProvider>(futuresChainProviderStr);
+                _futuresChainProvider = Composer.Instance.GetExportedValueByTypeName<IFutureChainProvider>(futuresChainProviderStr);
             }
         }
 
@@ -54,13 +55,43 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
         /// </summary>
         public override Dictionary<Symbol, List<Symbol>> GetSymbols()
         {
-            if (_vixFuturesChainProvider == null)
+            if (_futuresChainProvider == null)
             {
                 return base.GetSymbols();
             }
 
-            var symbols = _vixFuturesChainProvider.GetFutureContractList(VIX, _processingDate).ToList();
-            return new Dictionary<Symbol, List<Symbol>>() { { VIX, symbols } };
+            var chains = FuturesExpiryFunctions.FuturesExpiryDictionary.Keys
+                .Where(symbol => symbol.ID.Market == _market)
+                .Select(symbol =>
+                {
+                    var futureChain = _futuresChainProvider.GetFutureContractList(symbol, _processingDate)?.ToList();
+                    return KeyValuePair.Create(symbol, futureChain);
+                })
+                .ToList();
+
+            if (chains.Any(kvp => kvp.Value == null))
+            {
+                // The custom chain provider failed for some symbols, fallback to the default chain provider for those
+                var baseSymbols = base.GetSymbols();
+                if (chains.All(kvp => kvp.Value == null))
+                {
+                    return baseSymbols;
+                }
+
+                return chains
+                    .Select(kvp =>
+                    {
+                        if (kvp.Value == null && baseSymbols.TryGetValue(kvp.Key, out var chain))
+                        {
+                            return KeyValuePair.Create(kvp.Key, chain);
+                        }
+                        return kvp;
+                    })
+                    .Where(kvp => kvp.Value != null)
+                    .ToDictionary();
+            }
+
+            return new Dictionary<Symbol, List<Symbol>>(chains);
         }
 
         protected override IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
