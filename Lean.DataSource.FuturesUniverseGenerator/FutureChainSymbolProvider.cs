@@ -13,8 +13,11 @@
  * limitations under the License.
 */
 
+using QuantConnect.Configuration;
 using QuantConnect.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Interfaces;
+using QuantConnect.Securities;
+using QuantConnect.Util;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -27,6 +30,10 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
     /// </summary>
     public class FutureChainSymbolProvider : ChainSymbolProvider
     {
+        private static readonly Symbol VIX = Symbol.Create(Futures.Indices.VIX, SecurityType.Future, Market.CFE);
+
+        private readonly IFutureChainProvider _vixFuturesChainProvider;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="FutureChainSymbolProvider"/> class
         /// </summary>
@@ -34,6 +41,26 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
             string market, string dataFolderRoot)
             : base(dataCacheProvider, processingDate, securityType, market, dataFolderRoot)
         {
+            if (market == Market.CFE &&
+                Config.TryGetValue<string>("vix-futures-chain-provider", out var futuresChainProviderStr) &&
+                !string.IsNullOrEmpty(futuresChainProviderStr))
+            {
+                _vixFuturesChainProvider = Composer.Instance.GetExportedValueByTypeName<IFutureChainProvider>(futuresChainProviderStr);
+            }
+        }
+
+        /// <summary>
+        /// Gets all the available symbols keyed by the canonical symbol from the available price data in the data folder.
+        /// </summary>
+        public override Dictionary<Symbol, List<Symbol>> GetSymbols()
+        {
+            if (_vixFuturesChainProvider == null)
+            {
+                return base.GetSymbols();
+            }
+
+            var symbols = _vixFuturesChainProvider.GetFutureContractList(VIX, _processingDate).ToList();
+            return new Dictionary<Symbol, List<Symbol>>() { { VIX, symbols } };
         }
 
         protected override IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)

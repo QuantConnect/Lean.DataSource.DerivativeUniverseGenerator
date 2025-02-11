@@ -60,7 +60,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// <summary>
         /// Gets all the available symbols keyed by the canonical symbol from the available price data in the data folder.
         /// </summary>
-        public Dictionary<Symbol, List<Symbol>> GetSymbols()
+        public virtual Dictionary<Symbol, List<Symbol>> GetSymbols()
         {
             var result = new Dictionary<Symbol, List<Symbol>>();
 
