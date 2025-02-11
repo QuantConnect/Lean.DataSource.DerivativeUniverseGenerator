@@ -13,8 +13,12 @@
  * limitations under the License.
 */
 
+using QuantConnect.Configuration;
 using QuantConnect.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Interfaces;
+using QuantConnect.Securities;
+using QuantConnect.Securities.Future;
+using QuantConnect.Util;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -27,6 +31,9 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
     /// </summary>
     public class FutureChainSymbolProvider : ChainSymbolProvider
     {
+        private readonly IFutureChainProvider _futuresChainProvider;
+        private readonly string _market;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="FutureChainSymbolProvider"/> class
         /// </summary>
@@ -34,6 +41,57 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
             string market, string dataFolderRoot)
             : base(dataCacheProvider, processingDate, securityType, market, dataFolderRoot)
         {
+            _market = market;
+
+            if (Config.TryGetValue<string>("futures-chain-provider", out var futuresChainProviderStr) &&
+                !string.IsNullOrEmpty(futuresChainProviderStr))
+            {
+                _futuresChainProvider = Composer.Instance.GetExportedValueByTypeName<IFutureChainProvider>(futuresChainProviderStr);
+            }
+        }
+
+        /// <summary>
+        /// Gets all the available symbols keyed by the canonical symbol from the available price data in the data folder.
+        /// </summary>
+        public override Dictionary<Symbol, List<Symbol>> GetSymbols()
+        {
+            if (_futuresChainProvider == null)
+            {
+                return base.GetSymbols();
+            }
+
+            var chains = FuturesExpiryFunctions.FuturesExpiryDictionary.Keys
+                .Where(symbol => symbol.ID.Market == _market)
+                .Select(symbol =>
+                {
+                    var futureChain = _futuresChainProvider.GetFutureContractList(symbol, _processingDate)?.ToList();
+                    return KeyValuePair.Create(symbol, futureChain);
+                })
+                .ToList();
+
+            if (chains.Any(kvp => kvp.Value == null))
+            {
+                // The custom chain provider failed for some symbols, fallback to the default chain provider for those
+                var baseSymbols = base.GetSymbols();
+                if (chains.All(kvp => kvp.Value == null))
+                {
+                    return baseSymbols;
+                }
+
+                return chains
+                    .Select(kvp =>
+                    {
+                        if (kvp.Value == null && baseSymbols.TryGetValue(kvp.Key, out var chain))
+                        {
+                            return KeyValuePair.Create(kvp.Key, chain);
+                        }
+                        return kvp;
+                    })
+                    .Where(kvp => kvp.Value != null)
+                    .ToDictionary();
+            }
+
+            return new Dictionary<Symbol, List<Symbol>>(chains);
         }
 
         protected override IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
