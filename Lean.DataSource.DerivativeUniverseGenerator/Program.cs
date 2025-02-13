@@ -55,7 +55,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             Initialize(args, out var securityType, out var markets, out var dataFolderRoot, out var outputFolderRoot,
                 argNamesToIgnore ?? Array.Empty<string>());
 
-            var symbolsStr = Config.Get("symbols", "[]");
+            var symbolsStr = Config.Get("universe-generation-symbols", "[]");
             var symbols = JsonConvert.DeserializeObject<string[]>(symbolsStr);
             DerivativeUniverseGenerator.SetSymbolsToProcess(symbols);
 
