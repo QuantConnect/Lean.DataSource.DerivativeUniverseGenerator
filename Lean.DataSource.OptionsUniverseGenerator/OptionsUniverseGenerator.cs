@@ -83,12 +83,12 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// <summary>
         /// Adds a request for the mirror option symbol to the base list of requests.
         /// </summary>
-        protected override HistoryRequest[] GetDerivativeHistoryRequests(Symbol symbol, DateTime start, DateTime end, MarketHoursDatabase.Entry marketHoursEntry)
+        protected override HistoryRequest[] GetDerivativeHistoryRequests(Symbol symbol, MarketHoursDatabase.Entry marketHoursEntry)
         {
-            var requests = base.GetDerivativeHistoryRequests(symbol, start, end, marketHoursEntry);
+            var requests = base.GetDerivativeHistoryRequests(symbol, marketHoursEntry);
 
             var mirrorOptionSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
-            var mirrorOptionHistoryRequests = base.GetDerivativeHistoryRequests(mirrorOptionSymbol, start, end, marketHoursEntry);
+            var mirrorOptionHistoryRequests = base.GetDerivativeHistoryRequests(mirrorOptionSymbol, marketHoursEntry);
 
             return requests.Concat(mirrorOptionHistoryRequests).ToArray();
         }

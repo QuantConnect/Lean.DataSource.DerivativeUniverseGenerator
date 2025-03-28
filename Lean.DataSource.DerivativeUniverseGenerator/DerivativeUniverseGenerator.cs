@@ -278,11 +278,12 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected virtual bool TryGenerateAndWriteUnderlyingLine(Symbol underlyingSymbol, MarketHoursDatabase.Entry marketHoursEntry,
             StreamWriter writer, out IDerivativeUniverseFileEntry entry, out List<Slice> history)
         {
-            GetHistoryTimeRange(PriceHistoryResolutions[0], marketHoursEntry, out var historyEndUtc, out var historyStartUtc);
+            var historyType = typeof(TradeBar);
+            GetHistoryTimeRange(PriceHistoryResolutions[0], historyType, marketHoursEntry, out var startUtc, out var endUtc);
             var underlyingHistoryRequest = new HistoryRequest(
-                historyStartUtc,
-                historyEndUtc,
-                typeof(TradeBar),
+                startUtc,
+                endUtc,
+                historyType,
                 underlyingSymbol,
                 PriceHistoryResolutions[0],
                 marketHoursEntry.ExchangeHours,
@@ -291,7 +292,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 includeExtendedMarketHours: false,
                 isCustomData: false,
                 DataNormalizationMode.ScaledRaw,
-                LeanData.GetCommonTickTypeForCommonDataTypes(typeof(TradeBar), _securityType));
+                LeanData.GetCommonTickTypeForCommonDataTypes(historyType, _securityType));
 
             entry = CreateUniverseEntry(underlyingSymbol);
             history = GetHistory(new[] { underlyingHistoryRequest }, marketHoursEntry.ExchangeHours.TimeZone, marketHoursEntry);
@@ -319,13 +320,13 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
             foreach (var resolution in PriceHistoryResolutions)
             {
-                GetHistoryTimeRange(resolution, marketHoursEntry, out var historyEndUtc, out var historyStartUtc);
 
-                var resolutionHistoryRequests = historyRequests.Select(x =>
+                var resolutionHistoryRequests = historyRequests.Select(request =>
                 {
-                    var request = new HistoryRequest(x, x.Symbol, historyStartUtc, historyEndUtc);
-                    request.Resolution = resolution;
-                    return request;
+                    GetHistoryTimeRange(resolution, request.DataType, marketHoursEntry, out var startUtc, out var endUtc);
+                    var newRequest = new HistoryRequest(request, request.Symbol, startUtc, endUtc);
+                    newRequest.Resolution = resolution;
+                    return newRequest;
                 }).ToArray();
 
                 history = _historyProvider.GetHistory(resolutionHistoryRequests, sliceTimeZone).ToList();
@@ -338,15 +339,17 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             return history;
         }
 
-        private void GetHistoryTimeRange(Resolution resolution, MarketHoursDatabase.Entry marketHoursEntry,
-            out DateTime historyEndUtc, out DateTime historyStartUtc)
+        private void GetHistoryTimeRange(Resolution resolution, Type dataType, MarketHoursDatabase.Entry marketHoursEntry,
+            out DateTime startUtc, out DateTime endUtc)
         {
-            historyEndUtc = resolution != Resolution.Daily ? _processingDate : _processingDate.AddDays(1);
-            historyStartUtc = Time.GetStartTimeForTradeBars(marketHoursEntry.ExchangeHours, historyEndUtc, resolution.ToTimeSpan(),
+            var end = resolution != Resolution.Daily || dataType == typeof(OpenInterest)
+                ? _processingDate
+                : _processingDate.AddDays(1);
+            var start = Time.GetStartTimeForTradeBars(marketHoursEntry.ExchangeHours, end, resolution.ToTimeSpan(),
                 _historyBarCount, false, marketHoursEntry.DataTimeZone);
 
-            historyEndUtc = historyEndUtc.ConvertToUtc(marketHoursEntry.ExchangeHours.TimeZone);
-            historyStartUtc = historyStartUtc.ConvertToUtc(marketHoursEntry.ExchangeHours.TimeZone);
+            endUtc = end.ConvertToUtc(marketHoursEntry.ExchangeHours.TimeZone);
+            startUtc = start.ConvertToUtc(marketHoursEntry.ExchangeHours.TimeZone);
         }
 
         /// <summary>
@@ -363,8 +366,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     Log.Debug($"Generating universe entry for {symbol.Value}");
                 }
 
-                GetHistoryTimeRange(PriceHistoryResolutions[0], marketHoursEntry, out var historyEndUtc, out var historyStartUtc);
-                var historyRequests = GetDerivativeHistoryRequests(symbol, historyStartUtc, historyEndUtc, marketHoursEntry);
+                var historyRequests = GetDerivativeHistoryRequests(symbol, marketHoursEntry);
 
                 IDerivativeUniverseFileEntry entry;
                 if (historyRequests == null || historyRequests.Length == 0)
@@ -384,23 +386,25 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// <summary>
         /// Creates the requests to get the data to be used to generate the universe entry for the given derivative symbol
         /// </summary>
-        protected virtual HistoryRequest[] GetDerivativeHistoryRequests(Symbol symbol, DateTime startUtc, DateTime endUtc,
-            MarketHoursDatabase.Entry marketHoursEntry)
+        protected virtual HistoryRequest[] GetDerivativeHistoryRequests(Symbol symbol, MarketHoursDatabase.Entry marketHoursEntry)
         {
-            var dataTypes = new[] { typeof(TradeBar), typeof(QuoteBar), typeof(OpenInterest) };
-            return dataTypes.Select(dataType => new HistoryRequest(
-                startUtc,
-                endUtc,
-                dataType,
-                symbol,
-                PriceHistoryResolutions[0],
-                marketHoursEntry.ExchangeHours,
-                marketHoursEntry.DataTimeZone,
-                null,
-                includeExtendedMarketHours: false,
-                isCustomData: false,
-                DataNormalizationMode.ScaledRaw,
-                LeanData.GetCommonTickTypeForCommonDataTypes(dataType, _securityType))).ToArray();
+            return new[] { typeof(TradeBar), typeof(QuoteBar), typeof(OpenInterest) }.Select(dataType =>
+            {
+                GetHistoryTimeRange(PriceHistoryResolutions[0], dataType, marketHoursEntry, out var startUtc, out var endUtc);
+                return new HistoryRequest(
+                    startUtc,
+                    endUtc,
+                    dataType,
+                    symbol,
+                    PriceHistoryResolutions[0],
+                    marketHoursEntry.ExchangeHours,
+                    marketHoursEntry.DataTimeZone,
+                    null,
+                    includeExtendedMarketHours: false,
+                    isCustomData: false,
+                    DataNormalizationMode.ScaledRaw,
+                    LeanData.GetCommonTickTypeForCommonDataTypes(dataType, _securityType));
+            }).ToArray();
         }
 
         /// <summary>
