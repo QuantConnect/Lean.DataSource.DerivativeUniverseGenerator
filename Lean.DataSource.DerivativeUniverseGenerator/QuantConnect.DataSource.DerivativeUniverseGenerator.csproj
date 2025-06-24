@@ -1,10 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<OutputType>Library</OutputType>
-		<TargetFramework>net6.0</TargetFramework>
+		<TargetFramework>net9.0</TargetFramework>
 		<AssemblyName>QuantConnect.DataSource.DerivativeUniverseGenerator</AssemblyName>
 		<AssemblyTitle>QuantConnect.DataSource.DerivativeUniverseGenerator</AssemblyTitle>
-		<AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
 		<Product>QuantConnect.DataSource.DerivativeUniverseGenerator</Product>
 		<Copyright>Copyright © 2024</Copyright>
 		<PlatformTarget>AnyCPU</PlatformTarget>
@@ -30,14 +29,6 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 	</ItemGroup>
-
-	<!--
-	<ItemGroup>
-		<PackageReference Include="QuantConnect.Common" Version="2.5.*" />
-		<PackageReference Include="QuantConnect.Configuration" Version="2.5.*" />
-		<PackageReference Include="QuantConnect.Lean.Engine" Version="2.5.*" />
-	</ItemGroup>
-	-->
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\Lean\Common\QuantConnect.csproj" />

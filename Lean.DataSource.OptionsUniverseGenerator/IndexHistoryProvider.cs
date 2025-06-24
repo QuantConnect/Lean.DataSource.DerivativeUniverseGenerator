@@ -92,7 +92,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 if (!_securityTypeLog)
                 {
                     _securityTypeLog = true;
-                    Log.Error($"IndexHistoryProvider.GetHistory(): Invalid security type. " +
+                    Log.Error($"IndexHistoryProvider.GetHistory(): Invalid security type {request.Symbol.SecurityType}. " +
                         $"The {nameof(IndexHistoryProvider)} can only provide history for {SecurityType.Index} securities.");
                 }
                 return null;
@@ -103,7 +103,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 if (!_resolutionLog)
                 {
                     _resolutionLog = true;
-                    Log.Error($"IndexHistoryProvider.GetHistory(): Invalid resolution. " +
+                    Log.Error($"IndexHistoryProvider.GetHistory(): Invalid resolution {request.Resolution}. " +
                         $"The {nameof(IndexHistoryProvider)} can only provide history for {Resolution.Daily} resolution.");
                 }
                 return null;
@@ -114,19 +114,30 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 if (!_dataTypeLog)
                 {
                     _dataTypeLog = true;
-                    Log.Error($"IndexHistoryProvider.GetHistory(): Invalid tick type. " +
+                    Log.Error($"IndexHistoryProvider.GetHistory(): Invalid tick type {request.TickType}. " +
                         $"The {nameof(IndexHistoryProvider)} can only provide history for {TickType.Trade} tick type.");
                 }
                 return null;
             }
+
+            Log.Trace($"IndexHistoryProvider.GetHistory(): Fetching history for {request.Symbol}-{request.Resolution}-{request.TickType} " +
+                $"from {request.StartTimeUtc} to {request.EndTimeUtc}.");
 
             var symbol = $"^{request.Symbol.Value}";
             var start = Time.DateTimeToUnixTimeStamp(request.StartTimeUtc);
             var end = Time.DateTimeToUnixTimeStamp(request.EndTimeUtc);
 
             // let's retry on failure
-            for (var retryCount = 0; retryCount < 5; retryCount++)
+            const int maxRetries = 10;
+            for (var retryCount = 0; retryCount <= maxRetries; retryCount++)
             {
+                if (retryCount > 0)
+                {
+                    Thread.Sleep(2 * Time.OneSecond);
+                    Log.Trace($"IndexHistoryProvider.GetHistory(): Retry attempt {retryCount}/{maxRetries} for " +
+                        $"{request.Symbol}-{request.Resolution}-{request.TickType}.");
+                }
+
                 var restRequest = new RestRequest($"chart/{symbol}");
                 restRequest.AddQueryParameter("period1", start.ToString());
                 restRequest.AddQueryParameter("period2", end.ToString());
@@ -139,16 +150,18 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                     if (response.StatusCode != System.Net.HttpStatusCode.OK)
                     {
                         Log.Error($"IndexHistoryProvider.GetHistory(): Failed to get history for {symbol}. Status code: {response.StatusCode}.");
-                        Thread.Sleep(Time.OneSecond);
                         continue;
                     }
 
                     var content = response.Content;
+
+                    // Log the response content for debugging purposes
+                    Log.Trace($"IndexHistoryProvider.GetHistory(): Response content for {request.Symbol}-{request.Resolution}-{request.TickType}: {content}");
+
                     var indexPrices = JsonConvert.DeserializeObject<YahooFinanceIndexPrices>(content);
                     if (indexPrices == null)
                     {
                         Log.Error($"IndexHistoryProvider.GetHistory(): Failed to deserialize response for {symbol}.");
-                        Thread.Sleep(Time.OneSecond);
                         continue;
                     }
                     return ParseHistory(request.Symbol, indexPrices, request.ExchangeHours);
@@ -156,7 +169,6 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 catch (Exception exception)
                 {
                     Log.Error($"IndexHistoryProvider.GetHistory(): Failed to parse response for {symbol}. Exception: {exception}");
-                    Thread.Sleep(Time.OneSecond);
                     continue;
                 }
             }
@@ -184,6 +196,12 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                 var low = indexPrices.LowPrices[i];
                 var close = indexPrices.ClosePrices[i];
                 var volume = indexPrices.Volumes[i];
+
+                if (open == 0 || high == 0 || low == 0 || close == 0)
+                {
+                    throw new Exception($"IndexHistoryProvider.ParseHistory(): Invalid data for {symbol} at {time}. " +
+                        $"Open: {open}, High: {high}, Low: {low}, Close: {close}, Volume: {volume}.");
+                }
 
                 yield return new TradeBar(time, symbol, open, high, low, close, volume) { EndTime = endTime };
             }

@@ -14,12 +14,14 @@
 */
 
 using System;
-using System.IO;
 using System.Linq;
 using QuantConnect.Data;
 using QuantConnect.Util;
 using QuantConnect.Securities;
-using Lean.DataSource.DerivativeUniverseGenerator;
+using QuantConnect.DataSource.DerivativeUniverseGenerator;
+using System.Collections.Generic;
+using QuantConnect.Logging;
+using QuantConnect.Interfaces;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -28,6 +30,8 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
     /// </summary>
     public class OptionsUniverseGenerator : DerivativeUniverseGenerator.DerivativeUniverseGenerator
     {
+        private static readonly SecurityType[] _supportedSecurityTypes = { SecurityType.Option, SecurityType.IndexOption, SecurityType.FutureOption };
+
         /// <summary>
         /// Initializes a new instance of the <see cref="OptionsUniverseGenerator" /> class.
         /// </summary>
@@ -36,13 +40,16 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// <param name="market">Market of data to process</param>
         /// <param name="dataFolderRoot">Path to the data folder</param>
         /// <param name="outputFolderRoot">Path to the output folder</param>
+        /// <param name="dataProvider">The data provider to use</param>
+        /// <param name="dataCacheProvider">The data cache provider to use</param>
+        /// <param name="historyProvider">The history provider to use</param>
         public OptionsUniverseGenerator(DateTime processingDate, SecurityType securityType, string market, string dataFolderRoot,
-            string outputFolderRoot)
-            : base(processingDate, securityType, market, dataFolderRoot, outputFolderRoot)
+            string outputFolderRoot, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider, IHistoryProvider historyProvider)
+            : base(processingDate, securityType, market, dataFolderRoot, outputFolderRoot, dataProvider, dataCacheProvider, historyProvider)
         {
-            if (securityType != SecurityType.Option && securityType != SecurityType.IndexOption)
+            if (!_supportedSecurityTypes.Contains(securityType))
             {
-                throw new ArgumentException($"Only {nameof(SecurityType.Option)} and {nameof(SecurityType.IndexOption)} are supported", nameof(securityType));
+                throw new ArgumentException($"Only {string.Join(", ", _supportedSecurityTypes)} are supported", nameof(securityType));
             }
         }
 
@@ -51,23 +58,26 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             return new OptionUniverseEntry(symbol);
         }
 
-        /// <summary>
-        /// Generates the file name where the derivative's universe entry will be saved.
-        /// </summary>
-        protected override string GetUniverseFileName(Symbol canonicalSymbol)
+        protected override bool NeedsUnderlyingData()
         {
-            var universeDirectory = _securityType switch
-            {
-                SecurityType.Option => Path.Combine(_universesOutputFolderRoot, canonicalSymbol.Underlying.Value.ToLowerInvariant()),
-                SecurityType.IndexOption => Path.Combine(_universesOutputFolderRoot, canonicalSymbol.ID.Symbol.ToLowerInvariant()),
-                SecurityType.FutureOption => Path.Combine(_universesOutputFolderRoot,
-                    canonicalSymbol.ID.Symbol.ToLowerInvariant(),
-                    $"{canonicalSymbol.ID.Date:yyyyMMdd}"),
-                _ => throw new ArgumentOutOfRangeException(nameof(canonicalSymbol), $"Unsupported security type: {_securityType}")
-            };
+            // We don't need underlying data for future options, since they don't have greeks, so no need for underlying data for calculation
+            return OptionUniverseEntry.HasGreeks(_securityType);
+        }
 
-            Directory.CreateDirectory(universeDirectory);
-            return Path.Combine(universeDirectory, $"{_processingDate:yyyyMMdd}.csv");
+        protected override Dictionary<Symbol, List<Symbol>> FilterSymbols(Dictionary<Symbol, List<Symbol>> symbols,
+            HashSet<string> symbolsToProcess)
+        {
+            if (symbolsToProcess.IsNullOrEmpty())
+            {
+                return symbols;
+            }
+
+            if (_securityType == SecurityType.FutureOption)
+            {
+                return symbols.Where(kvp => symbolsToProcess.Contains(kvp.Key.Underlying.Canonical.Value.Replace("/", ""))).ToDictionary();
+            }
+
+            return symbols.Where(kvp => symbolsToProcess.Contains(kvp.Key.Underlying.Value)).ToDictionary();
         }
 
         /// <summary>
@@ -81,6 +91,108 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             var mirrorOptionHistoryRequests = base.GetDerivativeHistoryRequests(mirrorOptionSymbol, start, end, marketHoursEntry);
 
             return requests.Concat(mirrorOptionHistoryRequests).ToArray();
+        }
+
+        /// <summary>
+        /// Generates and the derivative universe entries for the specified canonical symbol.
+        /// </summary>
+        protected override IEnumerable<IDerivativeUniverseFileEntry> GenerateDerivativeEntries(Symbol canonicalSymbol, List<Symbol> symbols,
+            MarketHoursDatabase.Entry marketHoursEntry, List<Slice> underlyingHistory, IDerivativeUniverseFileEntry underlyingEntry)
+        {
+            var generatedEntries = base.GenerateDerivativeEntries(canonicalSymbol, symbols, marketHoursEntry, underlyingHistory, underlyingEntry);
+
+            if (!OptionUniverseEntry.HasGreeks(canonicalSymbol.SecurityType))
+            {
+                return generatedEntries;
+            }
+
+            var entries = new List<OptionUniverseEntry>();
+            var entriesWithMissingIv = new List<OptionUniverseEntry>();
+            // Enumerate the base entries to materialize them and check whether IVs are missing and need to be interpolated
+            foreach (OptionUniverseEntry entry in generatedEntries)
+            {
+                entries.Add(entry);
+                if (!entry.ImpliedVolatility.HasValue || entry.ImpliedVolatility == 0)
+                {
+                    // We keep the entries with missing IVs to interpolate them later and avoid iterating through the whole list again
+                    entriesWithMissingIv.Add(entry);
+                }
+            }
+
+            if (entriesWithMissingIv.Count > 0)
+            {
+                // Interpolate missing IVs and re-generate greeks
+                ImpliedVolatilityInterpolator ivInterpolator = null;
+                try
+                {
+                    ivInterpolator = ImpliedVolatilityInterpolator.Create(_processingDate, entries,
+                        (underlyingEntry as OptionUniverseEntry).Close, entries.Count - entriesWithMissingIv.Count);
+                }
+                catch (Exception e)
+                {
+                    Log.Error($"Failed to set up IV interpolator for {canonicalSymbol}. Error: {e.GetType()}: {e}");
+                }
+
+                if (ivInterpolator != null)
+                {
+                    var failedInterpolationsCount = 0;
+                    foreach (var entry in entriesWithMissingIv)
+                    {
+                        var interpolatedIv = 0m;
+                        try
+                        {
+                            interpolatedIv = ivInterpolator.Interpolate(entry.Symbol.ID.StrikePrice, entry.Symbol.ID.Date);
+                        }
+                        catch
+                        {
+                            Log.Error($"Failed interpolating IV for {entry.Symbol.Value} :: Underlying price: {(underlyingEntry as OptionUniverseEntry).Close}");
+                            failedInterpolationsCount++;
+                        }
+
+                        if (interpolatedIv != 0)
+                        {
+                            var updatedGreeks = ivInterpolator.GetUpdatedGreeksIndicators(entry.Symbol, interpolatedIv);
+                            entry.SetGreeksIndicators(updatedGreeks);
+                        }
+                    }
+
+                    if (failedInterpolationsCount > 0)
+                    {
+                        Log.Error($"Failed interpolating IV for {failedInterpolationsCount} out of {entriesWithMissingIv.Count} contracts for {canonicalSymbol}.");
+                    }
+                }
+            }
+
+            return entries;
+        }
+
+        private int _missingIvLogCount;
+
+        /// <remarks>
+        /// Overridden just for logging failed IV calculations in debug mode
+        /// </remarks>
+        protected override IDerivativeUniverseFileEntry GenerateDerivativeEntry(Symbol symbol, List<Slice> history, List<Slice> underlyingHistory)
+        {
+            var entry = base.GenerateDerivativeEntry(symbol, history, underlyingHistory);
+
+            if (Log.DebuggingEnabled &&
+                entry is OptionUniverseEntry optionEntry &&
+                optionEntry.ImpliedVolatility.HasValue &&
+                optionEntry.ImpliedVolatility.Value == 0 &&
+                _missingIvLogCount++ < 20)
+            {
+                var underlyingPrice = underlyingHistory.LastOrDefault(x => x.Bars.ContainsKey(symbol.Underlying))?.Bars?.GetValue(symbol.Underlying);
+                var optionPrice = history.LastOrDefault(x => x.QuoteBars.ContainsKey(symbol))?.QuoteBars?.GetValue(symbol);
+                var mirrorSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
+                var mirrorPrice = history.LastOrDefault(x => x.QuoteBars.ContainsKey(mirrorSymbol))?.QuoteBars?.GetValue(mirrorSymbol);
+
+                Log.Debug($"OptionsUniverseGenerator.GenerateDerivativeEntry(): IV is 0 for {symbol}.\n" +
+                    $"Underlying price: {underlyingPrice?.Time} - {underlyingPrice?.EndTime} :: {underlyingPrice}\n" +
+                    $"Option price: {optionPrice?.Time} - {optionPrice?.EndTime} :: {optionPrice}\n" +
+                    $"Mirror option price: {mirrorPrice?.Time} - {mirrorPrice?.EndTime} :: {mirrorPrice}");
+            }
+
+            return entry;
         }
     }
 }

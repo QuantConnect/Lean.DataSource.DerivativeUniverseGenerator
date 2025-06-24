@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net9.0</TargetFramework>
+		<AssemblyName>QuantConnect.DataSource.FuturesUniverseGenerator</AssemblyName>
+		<AssemblyTitle>QuantConnect.DataSource.FuturesUniverseGenerator</AssemblyTitle>
+		<Product>QuantConnect.DataSource.FuturesUniverseGenerator</Product>
+		<Copyright>Copyright © 2024</Copyright>
+		<PlatformTarget>AnyCPU</PlatformTarget>
+		<OutputPath>bin\$(Configuration)\</OutputPath>
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+		<Deterministic>true</Deterministic>
+		<ServerGarbageCollection>true</ServerGarbageCollection>
+	</PropertyGroup>
+
+	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+		<DebugType>full</DebugType>
+		<DebugSymbols>true</DebugSymbols>
+		<DefineConstants>DEBUG;TRACE</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+		<DebugType>pdbonly</DebugType>
+		<DefineConstants>TRACE</DefineConstants>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Content Include="config.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Lean.DataSource.DerivativeUniverseGenerator\QuantConnect.DataSource.DerivativeUniverseGenerator.csproj" />
+	</ItemGroup>
+</Project>

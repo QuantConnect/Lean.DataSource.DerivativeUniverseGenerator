@@ -17,25 +17,25 @@
 using System;
 using System.IO;
 using System.Linq;
-using QuantConnect;
 using QuantConnect.Util;
 using QuantConnect.Interfaces;
 using System.Collections.Generic;
 using QuantConnect.Configuration;
 
-namespace Lean.DataSource.DerivativeUniverseGenerator
+namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 {
     /// <summary>
     /// File based symbol chain provider
     /// </summary>
-    internal class ChainSymbolProvider
+    public class ChainSymbolProvider
     {
         private readonly IDataCacheProvider _dataCacheProvider;
         protected readonly DateTime _processingDate;
         protected readonly string _dataSourceFolder;
         protected readonly SecurityType _securityType;
 
-        protected TickType _symbolsDataTickType = TickType.Quote;
+        // 99% of cases will use quote zip files to get the contracts, but in rear cases we may need to use trade zip files. e.g EUREX data
+        protected TickType[] _symbolsDataTickTypes = { TickType.Quote, TickType.Trade };
 
         /// <summary>
         /// Careful: using other resolutions might introduce a look-ahead bias. For instance, if Daily resolution is used,
@@ -60,7 +60,7 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
         /// <summary>
         /// Gets all the available symbols keyed by the canonical symbol from the available price data in the data folder.
         /// </summary>
-        public Dictionary<Symbol, List<Symbol>> GetSymbols()
+        public virtual Dictionary<Symbol, List<Symbol>> GetSymbols()
         {
             var result = new Dictionary<Symbol, List<Symbol>>();
 
@@ -84,7 +84,7 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
                     }
 
                     var symbols = GetSymbolsFromZipEntryNames(zipFileName, canonicalSymbol, resolution);
-                    if (symbols != null)
+                    if (symbols != null && symbols.Count > 0)
                     {
                         result[canonicalSymbol] = symbols;
                     }
@@ -97,31 +97,56 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
         /// <summary>
         /// Gets the zip file names for the canonical symbols where the contracts or universe constituents will be read from.
         /// </summary>
-        private IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
+        protected virtual IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
         {
-            var tickTypeLower = _symbolsDataTickType.TickTypeToLower();
+            var tickTypesLower = _symbolsDataTickTypes.Select(tickType => tickType.TickTypeToLower()).ToArray();
 
             if (resolution == Resolution.Minute)
             {
+                var basePath = Path.Combine(_dataSourceFolder, resolution.ResolutionToLower());
+                var directories = _securityType != SecurityType.FutureOption
+                    ? Directory.EnumerateDirectories(basePath)
+                    : Directory.EnumerateDirectories(basePath, "*", new EnumerationOptions() { RecurseSubdirectories = true, MaxRecursionDepth = 1 });
+
                 var dateStr = date.ToString("yyyyMMdd");
                 var optionStyleLower = _securityType.DefaultOptionStyle().OptionStyleToLower();
-                return Directory.EnumerateDirectories(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()))
-                    .Select(directory => Path.Combine(directory, $"{dateStr}_{tickTypeLower}_{optionStyleLower}.zip"))
-                    .Where(fileName => File.Exists(fileName));
+
+                return directories
+                    .Select(directory => tickTypesLower
+                        .Select(tickTypeLower => Path.Combine(directory, $"{dateStr}_{tickTypeLower}_{optionStyleLower}.zip"))
+                        .Where(fileName => File.Exists(fileName))
+                        .FirstOrDefault())
+                    .Where(fileName => fileName != null);
             }
+            // Support for resolutions higher than minute, just for Lean local repo data generation
             else
             {
                 var dateStr = date.ToString("yyyy");
-                return Directory.EnumerateFiles(Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()), $"*{dateStr}*.zip", SearchOption.AllDirectories)
-                    .Where(fileName =>
-                    {
-                        var fileInfo = new FileInfo(fileName);
-                        var fileNameParts = fileInfo.Name.Split('_');
+                try
+                {
+                    return Directory.EnumerateFiles(
+                        Path.Combine(_dataSourceFolder, resolution.ResolutionToLower()),
+                        $"*{dateStr}*.zip",
+                        SearchOption.AllDirectories)
+                        .Select(fileName =>
+                        {
+                            var fileInfo = new FileInfo(fileName);
+                            var fileNameParts = fileInfo.Name.Split('_');
+                            var tickTypeIndex = Array.IndexOf(tickTypesLower, fileNameParts[2]);
 
-                        return fileNameParts.Length == 4 &&
-                                   fileNameParts[1] == dateStr &&
-                                   fileNameParts[2] == tickTypeLower;
-                    });
+                            return (fileName, directoryName: fileInfo.DirectoryName, tickTypeIndex);
+                        })
+                        // Get only supported tick type data
+                        .Where(tuple => tuple.tickTypeIndex > -1)
+                        // For each contract get the first matching tick type file
+                        .OrderBy(tuple => tuple.tickTypeIndex)
+                        .GroupBy(tuple => tuple.directoryName)
+                        .Select(group => group.First().fileName);
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    return Enumerable.Empty<string>();
+                }
             }
         }
 
@@ -141,15 +166,25 @@ namespace Lean.DataSource.DerivativeUniverseGenerator
                 return null;
             }
 
-            return zipEntries
+            var symbols = zipEntries
                 .Select(zipEntry => LeanData.ReadSymbolFromZipEntry(canonicalSymbol, resolution, zipEntry))
                 // do not return expired contracts
                 .Where(symbol => _processingDate.Date < symbol.ID.Date.Date)
-                .OrderBy(symbol => symbol.ID.OptionRight)
-                .ThenBy(symbol => symbol.ID.StrikePrice)
-                .ThenBy(symbol => symbol.ID.Date)
-                .ThenBy(symbol => symbol.ID)
-                .ToList();
+                .Distinct();
+
+            if (canonicalSymbol.SecurityType.IsOption())
+            {
+                symbols = symbols.OrderBy(symbol => symbol.ID.OptionRight)
+                    .ThenBy(symbol => symbol.ID.StrikePrice)
+                    .ThenBy(symbol => symbol.ID.Date)
+                    .ThenBy(symbol => symbol.ID);
+            }
+            else
+            {
+                symbols = symbols.OrderBy(symbol => symbol.ID.Date).ThenBy(symbol => symbol.ID);
+            }
+
+            return symbols.ToList();
         }
     }
 }

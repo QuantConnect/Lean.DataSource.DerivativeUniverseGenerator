@@ -1,0 +1,5 @@
+{
+	"data-folder": "../../../Data/",
+	"history-provider": [ "SubscriptionDataReaderHistoryProvider" ],
+	"universe-generation-symbols": []
+}
