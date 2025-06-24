@@ -17,6 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
 using QuantConnect.Configuration;
@@ -102,23 +103,23 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     Log.Error(ex, $"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Error generating universe.");
                     Environment.Exit(1);
                 }
-            }
 
-            var universeOutputPath = Path.Combine(outputFolderRoot, securityType.SecurityTypeToLower(), market, "universes");
-            var optionsAdditionalFieldGenerator = GetAdditionalFieldGenerator(processingDate, universeOutputPath);
+                var universeOutputPath = Path.Combine(outputFolderRoot, securityType.SecurityTypeToLower(), market, "universes");
+                var optionsAdditionalFieldGenerator = GetAdditionalFieldGenerator(processingDate, universeOutputPath);
 
-            try
-            {
-                if (!optionsAdditionalFieldGenerator.Run())
+                try
                 {
-                    Log.Error($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Failed to generate additional fields.");
+                    if (!optionsAdditionalFieldGenerator.Run())
+                    {
+                        Log.Error($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Failed to generate additional fields.");
+                        Environment.Exit(1);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, $"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Error generating additional fields.");
                     Environment.Exit(1);
                 }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, $"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Error generating additional fields.");
-                Environment.Exit(1);
             }
 
             Log.Trace($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): DONE in {timer.Elapsed:g}");
