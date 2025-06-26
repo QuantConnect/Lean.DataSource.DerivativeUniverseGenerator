@@ -13,12 +13,15 @@
  * limitations under the License.
 */
 
-using QuantConnect.Logging;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using QuantConnect.Data.Auxiliary;
+using QuantConnect.Interfaces;
+using QuantConnect.Lean.Engine.DataFeeds;
+using QuantConnect.Logging;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -28,21 +31,28 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         private const string _deltaHeader = "delta";
         private const string _sidHeader = "#symbol_id";
         private const string _tickerHeader = "symbol_value";
+        private readonly string _outputPath;
+        private readonly string _addtionalFieldDataPath;
         private Dictionary<string, Dictionary<DateTime, decimal>> _iv30s = new();
+        private static readonly IMapFileProvider _mapFileProvider = new LocalZipMapFileProvider();
 
-        public OptionAdditionalFieldGenerator(DateTime processingDate, string rootPath)
+        public OptionAdditionalFieldGenerator(DateTime processingDate, string rootPath, string newOutputPath, string addtionalFieldDataPath)
             : base(processingDate, rootPath)
         {
+            _outputPath = newOutputPath;
+            _addtionalFieldDataPath = addtionalFieldDataPath;
+            _mapFileProvider.Initialize(new DefaultDataProvider());
         }
 
         public override bool Run()
         {
             Log.Trace($"OptionAdditionalFieldGenerator.Run(): Processing additional fields for date {_processingDate:yyyy-MM-dd}");
+            var dataByTicker = new List<string>();
 
             // per symbol
-            try
+            foreach (var subFolder in Directory.GetDirectories(_rootPath))
             {
-                foreach (var subFolder in Directory.GetDirectories(_rootPath))
+                try
                 {
                     _iv30s[subFolder] = new();
                     var dateFile = Path.Combine(subFolder, $"{_processingDate:yyyyMMdd}.csv");
@@ -57,14 +67,18 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                     var additionalFields = new OptionAdditionalFields();
                     additionalFields.Update(ivs);
 
+                    var sid = SecurityIdentifier.GenerateEquity(symbol, Market.USA, true, _mapFileProvider, _processingDate);
+                    dataByTicker.Add($"{sid},{symbol},{additionalFields.ToCsv()}");
+
                     WriteToCsv(dateFile, additionalFields);
+
+                    SaveContentToFile(_outputPath, _addtionalFieldDataPath, $"{_processingDate:yyyyMMdd}", dataByTicker);
                 }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex,
-                    $"OptionAdditionalFieldGenerator.Run(): Error processing addtional fields for date {_processingDate:yyyy-MM-dd}");
-                return false;
+                catch (Exception ex)
+                {
+                    Log.Error(ex,
+                        $"OptionAdditionalFieldGenerator.Run(): Error processing addtional fields for date {_processingDate:yyyy-MM-dd}");
+                }
             }
             return true;
         }
@@ -148,6 +162,26 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             // Linear interpolation
             return (nearIv * Convert.ToDecimal((farExpiry - day30).TotalDays) + farIv * Convert.ToDecimal((day30 - nearExpiry).TotalDays))
                 / Convert.ToDecimal((farExpiry - nearExpiry).TotalDays);
+        }
+        
+        private static void SaveContentToFile(string destinationFolder, string processedFolder, string name, IEnumerable<string> contents)
+        {
+            Directory.CreateDirectory(destinationFolder);
+            name = $"{name.ToLowerInvariant()}.csv";
+            var filePath = Path.Combine(processedFolder, name);
+
+            var lines = new HashSet<string>(contents);
+            if (File.Exists(filePath))
+            {
+                foreach (var line in File.ReadAllLines(filePath))
+                {
+                    lines.Add(line);
+                }
+            }
+
+            var finalLines = lines.OrderBy(x => x.Split(',').First()).ToList();
+            var finalPath = Path.Combine(destinationFolder, name);
+            File.WriteAllLines(finalPath, finalLines);
         }
     }
 }
