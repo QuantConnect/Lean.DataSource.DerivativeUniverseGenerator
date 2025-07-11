@@ -175,8 +175,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             if (canonicalSymbol.SecurityType.IsOption())
             {
                 symbols = symbols.OrderBy(symbol => symbol.ID.OptionRight)
-                    .ThenBy(symbol => symbol.ID.StrikePrice)
                     .ThenBy(symbol => symbol.ID.Date)
+                    .ThenBy(symbol => symbol.ID.StrikePrice)
                     .ThenBy(symbol => symbol.ID);
             }
             else
