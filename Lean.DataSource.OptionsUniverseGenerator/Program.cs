@@ -13,10 +13,12 @@
  * limitations under the License.
 */
 
+using QuantConnect.Configuration;
 using QuantConnect.Interfaces;
 using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Lean.Engine.HistoricalData;
 using System;
+using System.IO;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -43,6 +45,24 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         {
             return new OptionsUniverseGenerator(processingDate, securityType, market, dataFolderRoot, outputFolderRoot,
                 dataProvider, dataCacheProvider, historyProvider);
+        }
+
+        protected override DerivativeUniverseGenerator.AdditionalFieldGenerator GetAdditionalFieldGenerator(DateTime processingDate,
+            string outputFolderRoot)
+        {
+            var addtionalFieldOutputDirectory = Path.Combine(
+                Config.Get("temp-output-directory", "/temp-output-directory"),
+                "alternative",
+                "quantconnect",
+                "ivrank"
+            );
+            var processedDirectory = Path.Combine(
+                Config.Get("processed-output-directory", Globals.DataFolder), 
+                "alternative",
+                "quantconnect",
+                "ivrank"
+            );
+            return new OptionAdditionalFieldGenerator(processingDate, outputFolderRoot, addtionalFieldOutputDirectory, processedDirectory);
         }
     }
 }
