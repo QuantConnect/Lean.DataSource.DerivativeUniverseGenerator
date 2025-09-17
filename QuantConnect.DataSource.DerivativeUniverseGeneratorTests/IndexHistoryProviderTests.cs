@@ -42,8 +42,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
             var marketHoursEntry = MarketHoursDatabase.FromDataFolder().GetEntry(symbol.ID.Market, symbol, symbol.SecurityType);
 
             var request = new HistoryRequest(
-                new DateTime(2024, 01, 08, 13, 30, 0),
-                new DateTime(2024, 02, 08, 13, 30, 0),
+                new DateTime(2025, 9, 16, 0, 0, 0),
+                new DateTime(2025, 9, 17, 0, 0, 0),
                 typeof(TradeBar),
                 symbol,
                 Resolution.Daily,

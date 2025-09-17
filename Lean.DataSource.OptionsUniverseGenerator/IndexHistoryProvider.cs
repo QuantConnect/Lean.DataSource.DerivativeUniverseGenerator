@@ -13,19 +13,20 @@
  * limitations under the License.
 */
 
-using System;
-using NodaTime;
-using RestSharp;
 using Newtonsoft.Json;
-using System.Threading;
+using NodaTime;
 using QuantConnect.Data;
-using QuantConnect.Logging;
 using QuantConnect.Data.Market;
-using System.Collections.Generic;
 using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Lean.Engine.HistoricalData;
-using QuantConnect.Util;
+using QuantConnect.Logging;
 using QuantConnect.Securities;
+using QuantConnect.Util;
+using RestSharp;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -127,68 +128,88 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             var start = Time.DateTimeToUnixTimeStamp(request.StartTimeUtc);
             var end = Time.DateTimeToUnixTimeStamp(request.EndTimeUtc);
 
-            // let's retry on failure
-            const int maxRetries = 10;
-            for (var retryCount = 0; retryCount <= maxRetries; retryCount++)
+            foreach (var interval in new[] { "1d", "1m" })
             {
-                if (retryCount > 0)
+                // let's retry on failure
+                const int maxRetries = 5;
+                for (var retryCount = 0; retryCount <= maxRetries; retryCount++)
                 {
-                    Thread.Sleep(2 * Time.OneSecond);
-                    Log.Trace($"IndexHistoryProvider.GetHistory(): Retry attempt {retryCount}/{maxRetries} for " +
-                        $"{request.Symbol}-{request.Resolution}-{request.TickType}.");
-                }
-
-                var restRequest = new RestRequest($"chart/{symbol}");
-                restRequest.AddQueryParameter("period1", start.ToString());
-                restRequest.AddQueryParameter("period2", end.ToString());
-                restRequest.AddQueryParameter("interval", "1d");
-                restRequest.AddQueryParameter("includePrePost", request.IncludeExtendedMarketHours.ToString());
-
-                try
-                {
-                    var response = _restClient.Get(restRequest);
-                    if (response.StatusCode != System.Net.HttpStatusCode.OK)
+                    if (retryCount > 0)
                     {
-                        Log.Error($"IndexHistoryProvider.GetHistory(): Failed to get history for {symbol}. Status code: {response.StatusCode}.");
-                        continue;
+                        Thread.Sleep((2 + retryCount) * Time.OneSecond);
+                        Log.Trace($"IndexHistoryProvider.GetHistory(): Retry attempt {retryCount}/{maxRetries} for " +
+                            $"{request.Symbol}-{request.Resolution}-{request.TickType}.");
                     }
 
-                    var content = response.Content;
+                    var restRequest = new RestRequest($"chart/{symbol}");
+                    restRequest.AddQueryParameter("period1", start.ToString());
+                    restRequest.AddQueryParameter("period2", end.ToString());
+                    restRequest.AddQueryParameter("interval", interval);
+                    restRequest.AddQueryParameter("includePrePost", request.IncludeExtendedMarketHours.ToString());
 
-                    // Log the response content for debugging purposes
-                    Log.Trace($"IndexHistoryProvider.GetHistory(): Response content for {request.Symbol}-{request.Resolution}-{request.TickType}: {content}");
-
-                    var indexPrices = JsonConvert.DeserializeObject<YahooFinanceIndexPrices>(content);
-                    if (indexPrices == null)
+                    try
                     {
-                        Log.Error($"IndexHistoryProvider.GetHistory(): Failed to deserialize response for {symbol}.");
+                        var response = _restClient.Get(restRequest);
+                        if (response.StatusCode != System.Net.HttpStatusCode.OK)
+                        {
+                            Log.Error($"IndexHistoryProvider.GetHistory(): Failed to get history for {symbol}. Status code: {response.StatusCode}.");
+                            continue;
+                        }
+
+                        var content = response.Content;
+
+                        // Log the response content for debugging purposes
+                        Log.Trace($"IndexHistoryProvider.GetHistory(): Response content for {request.Symbol}-{request.Resolution}-{request.TickType}: {content}");
+
+                        var indexPrices = JsonConvert.DeserializeObject<YahooFinanceIndexPrices>(content);
+                        if (indexPrices == null)
+                        {
+                            Log.Error($"IndexHistoryProvider.GetHistory(): Failed to deserialize response for {symbol}.");
+                            continue;
+                        }
+                        // to catch any failure in the data and retry we need to yield it
+                        var result = ParseHistory(request.Symbol, indexPrices, request.ExchangeHours, interval);
+                        if (interval == "1m")
+                        {
+                            result = result.Where(x => request.ExchangeHours.IsOpen(x.Time, x.EndTime, extendedMarketHours: false));
+                            result = LeanData.AggregateTradeBars(result, request.Symbol, Time.OneDay);
+                        }
+
+                        foreach (var point in result)
+                        {
+                            if (_useDailyPreciseEndTime)
+                            {
+                                var calendar = LeanData.GetDailyCalendar(point.EndTime, request.ExchangeHours, false);
+                                point.Time = calendar.Start;
+                                point.EndTime = calendar.End;
+                            }
+                        }
+                        return result.ToList();
+                    }
+                    catch (Exception exception)
+                    {
+                        Log.Error($"IndexHistoryProvider.GetHistory(): Failed to parse response for {symbol}. Exception: {exception}");
                         continue;
                     }
-                    return ParseHistory(request.Symbol, indexPrices, request.ExchangeHours);
-                }
-                catch (Exception exception)
-                {
-                    Log.Error($"IndexHistoryProvider.GetHistory(): Failed to parse response for {symbol}. Exception: {exception}");
-                    continue;
                 }
             }
             return null;
         }
 
-        private IEnumerable<BaseData> ParseHistory(Symbol symbol, YahooFinanceIndexPrices indexPrices, SecurityExchangeHours exchange)
+        private IEnumerable<TradeBar> ParseHistory(Symbol symbol, YahooFinanceIndexPrices indexPrices, SecurityExchangeHours exchange, string interval)
         {
-            for (int i = 0; i < indexPrices.Timestamps.Count; i++)
+            for (var i = 0; i < indexPrices.Timestamps.Count; i++)
             {
+                DateTime endTime;
                 var time = Time.UnixTimeStampToDateTime(indexPrices.Timestamps[i]).ConvertFromUtc(exchange.TimeZone);
-                var endTime = DateTime.MaxValue;
-                if (!_useDailyPreciseEndTime)
+                if (interval == "1d")
                 {
                     time = time.Date;
                     endTime = time.AddDays(1);
                 }
                 else
                 {
-                    endTime = LeanData.GetNextDailyEndTime(symbol, time, exchange);
+                    endTime = time.AddMinutes(1);
                 }
 
                 var open = indexPrices.OpenPrices[i];
