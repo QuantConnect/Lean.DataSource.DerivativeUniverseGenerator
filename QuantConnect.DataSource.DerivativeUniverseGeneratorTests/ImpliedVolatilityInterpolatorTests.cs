@@ -30,8 +30,9 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
     public class ImpliedVolatilityInterpolatorTests
     {
         private const string _testFile = "TestData/test.csv";
-        private const string _sidHeader = "#symbol_id";
-        private const string _tickerHeader = "symbol_value";
+        private const string _expiryHeader = "#expiry";
+        private const string _strikeHeader = "strike";
+        private const string _rightHeader = "right";
         private const string _priceHeader = "close";
         private const string _ivHeader = "implied_volatility";
         private const int _validCount = 236;
@@ -45,25 +46,34 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
         {
             var lines = File.ReadAllLines(_testFile);
             var headers = lines[0].Split(',');
-            var sidIndex = Array.IndexOf(headers, _sidHeader);
-            var tickerIndex = Array.IndexOf(headers, _tickerHeader);
+            var expiryIndex = Array.IndexOf(headers, _expiryHeader);
+            var strikeIndex = Array.IndexOf(headers, _strikeHeader);
+            var rightIndex = Array.IndexOf(headers, _rightHeader);
             var priceIndex = Array.IndexOf(headers, _priceHeader);
             var ivIndex = Array.IndexOf(headers, _ivHeader);
 
             var underlying = lines[1].Split(',');
-            var undSymbol = new Symbol(SecurityIdentifier.Parse(underlying[sidIndex]), underlying[tickerIndex]);
+            var undSymbol = Symbol.Create("SPY", SecurityType.Equity, Market.USA);
             var underlyingPrice = decimal.Parse(underlying[priceIndex]);
 
             _data = lines.Skip(2)
                 .Select(line =>
                 {
                     var items = line.Split(',');
-                    var symbol = new Symbol(SecurityIdentifier.Parse(items[sidIndex]), items[tickerIndex]);
+                    var expiry = DateTime.ParseExact(items[expiryIndex], "yyyyMMdd", null);
+                    var strike = decimal.Parse(items[strikeIndex]);
+                    var right = items[rightIndex] == "C" ? OptionRight.Call : OptionRight.Put;
+
+                    var symbol = Symbol.CreateOption(undSymbol, null, undSymbol.ID.Market,
+                        undSymbol.SecurityType.DefaultOptionStyle(), right, strike, expiry);
+
                     var entry = new OptionUniverseEntry(symbol);
                     entry.Close = decimal.Parse(items[priceIndex]);
                     return entry;
                 })
                 .ToList();
+
+            var valids = 0;
 
             foreach (var entry in _data)
             {
@@ -77,6 +87,11 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
                 greeks.Update(new TradeBar { Symbol = undSymbol, EndTime = _currentDate, Close = underlyingPrice });
 
                 entry.SetGreeksIndicators(greeks);
+
+                if (entry.ImpliedVolatility != null && entry.ImpliedVolatility.Value != 0m)
+                {
+                    valids++;
+                }
             }
 
             _interpolator = new TestImpliedVolatilityInterpolator(_currentDate, _data, underlyingPrice, _validCount);
@@ -96,7 +111,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
 
                 Assert.Greater(interpolatedIv, 0m);         // domain of IV :-> (0, inf]
 
-                var greekIndicator = _interpolator.GetUpdatedGreeksIndicators(symbol, interpolatedIv, OptionPricingModelType.BlackScholes, 
+                var greekIndicator = _interpolator.GetUpdatedGreeksIndicators(symbol, interpolatedIv, OptionPricingModelType.BlackScholes,
                     OptionPricingModelType.BlackScholes);
                 var greeks = greekIndicator.GetGreeks();
 

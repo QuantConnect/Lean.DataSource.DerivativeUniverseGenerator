@@ -22,11 +22,13 @@ using QuantConnect.Lean.Engine.HistoricalData;
 using QuantConnect.Logging;
 using QuantConnect.Securities;
 using QuantConnect.Util;
-using RestSharp;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Threading;
+using System.Web;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -39,9 +41,13 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         private bool _resolutionLog;
         private bool _dataTypeLog;
         private bool _useDailyPreciseEndTime;
-        private readonly static string YahooFinanceApiUrl = "https://query1.finance.yahoo.com/v8/finance";
+        private readonly static string YahooFinanceApiUrl = "https://query1.finance.yahoo.com/";
+        private readonly static string BaseUri = "v8/finance";
 
-        private readonly RestClient _restClient = new(YahooFinanceApiUrl);
+        private readonly HttpClient _httpClient = new HttpClient
+        {
+            BaseAddress = new Uri(YahooFinanceApiUrl),
+        };
 
         /// <summary>
         /// Initializes this history provider to work for the specified job
@@ -51,6 +57,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         {
             _useDailyPreciseEndTime = parameters.AlgorithmSettings.DailyPreciseEndTime;
             AlgorithmSettings = parameters.AlgorithmSettings;
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "C#/HttpClient");
         }
 
         /// <summary>
@@ -141,22 +148,21 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
                             $"{request.Symbol}-{request.Resolution}-{request.TickType}.");
                     }
 
-                    var restRequest = new RestRequest($"chart/{symbol}");
-                    restRequest.AddQueryParameter("period1", start.ToString());
-                    restRequest.AddQueryParameter("period2", end.ToString());
-                    restRequest.AddQueryParameter("interval", interval);
-                    restRequest.AddQueryParameter("includePrePost", request.IncludeExtendedMarketHours.ToString());
+                    var query = HttpUtility.ParseQueryString(string.Empty);
+                    query["period1"] = start.ToString();
+                    query["period2"] = end.ToString();
+                    query["interval"] = interval;
+                    query["includePrePost"] = request.IncludeExtendedMarketHours.ToString();
+
+                    var uri = $"{BaseUri}/chart/{symbol}?{query}";
 
                     try
                     {
-                        var response = _restClient.Get(restRequest);
-                        if (response.StatusCode != System.Net.HttpStatusCode.OK)
+                        if (!_httpClient.TryDownloadData(uri, out var content, out var statusCode))
                         {
-                            Log.Error($"IndexHistoryProvider.GetHistory(): Failed to get history for {symbol}. Status code: {response.StatusCode}.");
+                            Log.Error($"IndexHistoryProvider.GetHistory(): Failed to get history for {symbol}. Status code: {statusCode}.");
                             continue;
                         }
-
-                        var content = response.Content;
 
                         // Log the response content for debugging purposes
                         Log.Trace($"IndexHistoryProvider.GetHistory(): Response content for {request.Symbol}-{request.Resolution}-{request.TickType}: {content}");
