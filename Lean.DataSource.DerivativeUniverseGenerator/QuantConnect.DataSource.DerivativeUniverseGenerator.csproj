@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<OutputType>Library</OutputType>
-		<TargetFramework>net9.0</TargetFramework>
+		<TargetFramework>net10.0</TargetFramework>
 		<AssemblyName>QuantConnect.DataSource.DerivativeUniverseGenerator</AssemblyName>
 		<AssemblyTitle>QuantConnect.DataSource.DerivativeUniverseGenerator</AssemblyTitle>
 		<Product>QuantConnect.DataSource.DerivativeUniverseGenerator</Product>
