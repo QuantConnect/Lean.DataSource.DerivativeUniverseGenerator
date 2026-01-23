@@ -113,7 +113,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
 
                 var greekIndicator = _interpolator.GetUpdatedGreeksIndicators(symbol, interpolatedIv, OptionPricingModelType.BlackScholes,
                     OptionPricingModelType.BlackScholes);
-                var greeks = greekIndicator.GetGreeks();
+                var greeks = greekIndicator.Greeks;
 
                 Assert.NotZero(greeks.Delta);
                 // Assert.NotZero(greeks.Gamma);            // Gamma can be zero at very ITM options
