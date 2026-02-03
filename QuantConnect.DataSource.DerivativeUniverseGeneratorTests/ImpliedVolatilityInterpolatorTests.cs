@@ -77,7 +77,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
 
             foreach (var entry in _data)
             {
-                var mirrorSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(entry.Symbol);
+                var mirrorSymbol = entry.Symbol.GetMirrorOptionSymbol();
                 var mirrorEntry = _data.SingleOrDefault(x => x.Symbol == mirrorSymbol);
                 if (mirrorEntry == null || entry.Close == 0m || mirrorEntry.Close == 0m) continue;
 

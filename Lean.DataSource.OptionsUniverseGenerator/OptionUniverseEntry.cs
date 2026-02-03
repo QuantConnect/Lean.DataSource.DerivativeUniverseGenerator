@@ -47,9 +47,9 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         {
             // Options universes contain a line for the underlying: we don't need greeks for it.
             // Future options don't have greeks either.
-            if (HasGreeks(symbol.SecurityType))
+            if (HasGreeks(symbol.SecurityType) && !symbol.IsCanonical())
             {
-                var mirrorOptionSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
+                var mirrorOptionSymbol = symbol.GetMirrorOptionSymbol();
                 _greeksIndicators = new GreeksIndicators(symbol, mirrorOptionSymbol);
             }
         }
