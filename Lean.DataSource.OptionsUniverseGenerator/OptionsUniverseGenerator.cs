@@ -87,7 +87,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         {
             var requests = base.GetDerivativeHistoryRequests(symbol, start, end, marketHoursEntry);
 
-            var mirrorOptionSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
+            var mirrorOptionSymbol = symbol.GetMirrorOptionSymbol();
             var mirrorOptionHistoryRequests = base.GetDerivativeHistoryRequests(mirrorOptionSymbol, start, end, marketHoursEntry);
 
             return requests.Concat(mirrorOptionHistoryRequests).ToArray();
@@ -183,7 +183,7 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             {
                 var underlyingPrice = underlyingHistory.LastOrDefault(x => x.Bars.ContainsKey(symbol.Underlying))?.Bars?.GetValue(symbol.Underlying);
                 var optionPrice = history.LastOrDefault(x => x.QuoteBars.ContainsKey(symbol))?.QuoteBars?.GetValue(symbol);
-                var mirrorSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
+                var mirrorSymbol = symbol.GetMirrorOptionSymbol();
                 var mirrorPrice = history.LastOrDefault(x => x.QuoteBars.ContainsKey(mirrorSymbol))?.QuoteBars?.GetValue(mirrorSymbol);
 
                 Log.Debug($"OptionsUniverseGenerator.GenerateDerivativeEntry(): IV is 0 for {symbol}.\n" +

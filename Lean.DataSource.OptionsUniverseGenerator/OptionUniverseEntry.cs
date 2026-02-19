@@ -17,6 +17,7 @@ using QuantConnect.DataSource.DerivativeUniverseGenerator;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Data.UniverseSelection;
+using QuantConnect.Indicators;
 
 namespace QuantConnect.DataSource.OptionsUniverseGenerator
 {
@@ -30,12 +31,12 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         /// <summary>
         /// Option contract's implied volatility on the processing date.
         /// </summary>
-        public decimal? ImpliedVolatility => _greeksIndicators?.ImpliedVolatility;
+        public decimal? ImpliedVolatility => _greeksIndicators?.ImpliedVolatility?.Current?.Value;
 
         /// <summary>
         /// Option contract's greeks on the processing date.
         /// </summary>
-        public Greeks Greeks => _greeksIndicators?.GetGreeks();
+        public Greeks Greeks => _greeksIndicators?.Greeks;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="OptionUniverseEntry"/> class.
@@ -46,9 +47,9 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
         {
             // Options universes contain a line for the underlying: we don't need greeks for it.
             // Future options don't have greeks either.
-            if (HasGreeks(symbol.SecurityType))
+            if (HasGreeks(symbol.SecurityType) && !symbol.IsCanonical())
             {
-                var mirrorOptionSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(symbol);
+                var mirrorOptionSymbol = symbol.GetMirrorOptionSymbol();
                 _greeksIndicators = new GreeksIndicators(symbol, mirrorOptionSymbol);
             }
         }

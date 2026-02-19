@@ -77,7 +77,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
 
             foreach (var entry in _data)
             {
-                var mirrorSymbol = OptionsUniverseGeneratorUtils.GetMirrorOptionSymbol(entry.Symbol);
+                var mirrorSymbol = entry.Symbol.GetMirrorOptionSymbol();
                 var mirrorEntry = _data.SingleOrDefault(x => x.Symbol == mirrorSymbol);
                 if (mirrorEntry == null || entry.Close == 0m || mirrorEntry.Close == 0m) continue;
 
@@ -113,7 +113,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
 
                 var greekIndicator = _interpolator.GetUpdatedGreeksIndicators(symbol, interpolatedIv, OptionPricingModelType.BlackScholes,
                     OptionPricingModelType.BlackScholes);
-                var greeks = greekIndicator.GetGreeks();
+                var greeks = greekIndicator.Greeks;
 
                 Assert.NotZero(greeks.Delta);
                 // Assert.NotZero(greeks.Gamma);            // Gamma can be zero at very ITM options
