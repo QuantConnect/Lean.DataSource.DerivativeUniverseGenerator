@@ -13,11 +13,13 @@
  * limitations under the License.
 */
 
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
-using System;
-
+using Newtonsoft.Json;
 using QuantConnect.Configuration;
 using QuantConnect.Logging;
 using QuantConnect.Util;
@@ -25,8 +27,6 @@ using QuantConnect.Data;
 using QuantConnect.Interfaces;
 using QuantConnect.Lean.Engine.DataFeeds;
 using QuantConnect.Lean.Engine.HistoricalData;
-using Newtonsoft.Json;
-using System.Collections.Generic;
 
 namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 {
@@ -103,6 +103,23 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     Log.Error(ex, $"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Error generating universe.");
                     Environment.Exit(1);
                 }
+
+                var universeOutputPath = Path.Combine(outputFolderRoot, securityType.SecurityTypeToLower(), market, "universes");
+                var optionsAdditionalFieldGenerator = GetAdditionalFieldGenerator(processingDate, universeOutputPath);
+
+                try
+                {
+                    if (!optionsAdditionalFieldGenerator.Run())
+                    {
+                        Log.Error($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Failed to generate additional fields.");
+                        Environment.Exit(1);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, $"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): Error generating additional fields.");
+                    Environment.Exit(1);
+                }
             }
 
             Log.Trace($"QuantConnect.DataSource.DerivativeUniverseGenerator.Program.Main(): DONE in {timer.Elapsed:g}");
@@ -113,6 +130,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected abstract DerivativeUniverseGenerator GetUniverseGenerator(SecurityType securityType, string market, string dataFolderRoot,
             string outputFolderRoot, DateTime processingDate, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider,
             HistoryProviderManager historyProvider);
+
+        protected abstract AdditionalFieldGenerator GetAdditionalFieldGenerator(DateTime processingDate, string outputFolderRoot);
 
         /// <summary>
         /// Validate and extract command line args and configuration options.

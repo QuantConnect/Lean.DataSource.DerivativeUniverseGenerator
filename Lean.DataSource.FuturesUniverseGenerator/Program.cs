@@ -43,5 +43,10 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
             return new FuturesUniverseGenerator(processingDate, market, dataFolderRoot, outputFolderRoot, dataProvider,
                 dataCacheProvider, historyProvider);
         }
+
+        protected override DerivativeUniverseGenerator.AdditionalFieldGenerator GetAdditionalFieldGenerator(DateTime dateTime, string _)
+        {
+            return null;
+        }
     }
 }
