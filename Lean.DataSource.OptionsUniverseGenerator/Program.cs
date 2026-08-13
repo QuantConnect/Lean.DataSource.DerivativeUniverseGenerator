@@ -39,10 +39,10 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
 
         protected override DerivativeUniverseGenerator.DerivativeUniverseGenerator GetUniverseGenerator(SecurityType securityType, string market,
             string dataFolderRoot, string outputFolderRoot, DateTime processingDate, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider,
-            HistoryProviderManager historyProvider)
+            HistoryProviderManager underlyingHistoryProvider, HistoryProviderManager derivativeHistoryProvider)
         {
             return new OptionsUniverseGenerator(processingDate, securityType, market, dataFolderRoot, outputFolderRoot,
-                dataProvider, dataCacheProvider, historyProvider);
+                dataProvider, dataCacheProvider, underlyingHistoryProvider, derivativeHistoryProvider);
         }
     }
 }

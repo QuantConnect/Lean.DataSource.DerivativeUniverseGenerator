@@ -77,10 +77,9 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             api.Initialize(Globals.UserId, Globals.UserToken, Globals.DataFolder);
 
             var dataCacheProvider = new ZipDataCacheProvider(dataProvider);
-            var historyProvider = new HistoryProviderManager();
             var parameters = new HistoryProviderInitializeParameters(null, api, dataProvider, dataCacheProvider, mapFileProvider,
                 factorFileProvider, (_) => { }, true, new DataPermissionManager(), null, new AlgorithmSettings());
-            historyProvider.Initialize(parameters);
+            var (underlyingHistoryProvider, derivativeHistoryProvider) = CreateHistoryProviders(parameters);
 
             var timer = new Stopwatch();
             timer.Start();
@@ -88,7 +87,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             foreach (var market in markets)
             {
                 var universeGenerator = GetUniverseGenerator(securityType, market, dataFolderRoot, outputFolderRoot, processingDate,
-                    dataProvider, dataCacheProvider, historyProvider);
+                    dataProvider, dataCacheProvider, underlyingHistoryProvider, derivativeHistoryProvider);
 
                 try
                 {
@@ -112,7 +111,65 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
 
         protected abstract DerivativeUniverseGenerator GetUniverseGenerator(SecurityType securityType, string market, string dataFolderRoot,
             string outputFolderRoot, DateTime processingDate, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider,
-            HistoryProviderManager historyProvider);
+            HistoryProviderManager underlyingHistoryProvider, HistoryProviderManager derivativeHistoryProvider);
+
+        /// <summary>
+        /// Creates the history providers to use for the underlying securities and for the derivative contracts.
+        /// The "universe-generation-underlying-history-provider" and "universe-generation-derivative-history-provider" configs
+        /// allow overriding the history providers (from the "history-provider" config) to use for each of them.
+        /// When a config is not set, the corresponding history provider falls back to the "history-provider" config,
+        /// so by default a single shared history provider is used for both, just like before these configs existed.
+        /// </summary>
+        private static (HistoryProviderManager UnderlyingHistoryProvider, HistoryProviderManager DerivativeHistoryProvider) CreateHistoryProviders(
+            HistoryProviderInitializeParameters parameters)
+        {
+            var underlyingHistoryProviders = Config.Get("universe-generation-underlying-history-provider");
+            var derivativeHistoryProviders = Config.Get("universe-generation-derivative-history-provider");
+
+            HistoryProviderManager defaultHistoryProvider = null;
+            HistoryProviderManager GetDefaultHistoryProvider() => defaultHistoryProvider ??= CreateHistoryProvider(null, parameters);
+
+            var underlyingHistoryProvider = underlyingHistoryProviders.DeserializeList().IsNullOrEmpty()
+                ? GetDefaultHistoryProvider()
+                : CreateHistoryProvider(underlyingHistoryProviders, parameters);
+
+            var derivativeHistoryProvider = derivativeHistoryProviders.DeserializeList().IsNullOrEmpty()
+                ? GetDefaultHistoryProvider()
+                : derivativeHistoryProviders == underlyingHistoryProviders
+                    ? underlyingHistoryProvider
+                    : CreateHistoryProvider(derivativeHistoryProviders, parameters);
+
+            return (underlyingHistoryProvider, derivativeHistoryProvider);
+        }
+
+        /// <summary>
+        /// Creates and initializes a history provider manager for the given history providers,
+        /// or for the "history-provider" config if none are given.
+        /// </summary>
+        private static HistoryProviderManager CreateHistoryProvider(string historyProviders, HistoryProviderInitializeParameters parameters)
+        {
+            var historyProviderManager = new HistoryProviderManager();
+            if (string.IsNullOrEmpty(historyProviders))
+            {
+                historyProviderManager.Initialize(parameters);
+                return historyProviderManager;
+            }
+
+            // The history provider manager reads the history providers to wrap from the "history-provider" config,
+            // so we temporarily override it while initializing this instance
+            var originalHistoryProviders = Config.Get("history-provider", "SubscriptionDataReaderHistoryProvider");
+            Config.Set("history-provider", historyProviders);
+            try
+            {
+                historyProviderManager.Initialize(parameters);
+            }
+            finally
+            {
+                Config.Set("history-provider", originalHistoryProviders);
+            }
+
+            return historyProviderManager;
+        }
 
         /// <summary>
         /// Validate and extract command line args and configuration options.

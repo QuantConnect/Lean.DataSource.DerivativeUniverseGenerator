@@ -20,6 +20,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NodaTime;
+using QuantConnect.Configuration;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Interfaces;
@@ -41,8 +42,13 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected readonly string _dataFolderRoot;
         protected readonly string _outputFolderRoot;
 
+        // whether to generate the universe files as backup files (suffixed with ".backup"),
+        // which Lean can use in live trading as a fallback when the expected universe files are not available yet
+        protected readonly bool _generateBackupFiles;
+
         protected readonly IDataProvider _dataProvider;
-        protected readonly IHistoryProvider _historyProvider;
+        protected readonly IHistoryProvider _underlyingHistoryProvider;
+        protected readonly IHistoryProvider _derivativeHistoryProvider;
         protected readonly IDataCacheProvider _dataCacheProvider;
 
         protected readonly MarketHoursDatabase _marketHoursDatabase;
@@ -72,9 +78,29 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// <param name="outputFolderRoot">Path to the output folder</param>
         /// <param name="dataProvider">The data provider to use</param>
         /// <param name="dataCacheProvider">The data cache provider to use</param>
-        /// <param name="historyProvider">The history provider to use</param>
+        /// <param name="historyProvider">The history provider to use for both the underlying and the derivatives</param>
         public DerivativeUniverseGenerator(DateTime processingDate, SecurityType securityType, string market, string dataFolderRoot,
             string outputFolderRoot, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider, IHistoryProvider historyProvider)
+            : this(processingDate, securityType, market, dataFolderRoot, outputFolderRoot, dataProvider, dataCacheProvider,
+                historyProvider, historyProvider)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DerivativeUniverseGenerator" /> class.
+        /// </summary>
+        /// <param name="processingDate">The processing date</param>
+        /// <param name="securityType">Derivative security type to process</param>
+        /// <param name="market">Market of data to process</param>
+        /// <param name="dataFolderRoot">Path to the data folder</param>
+        /// <param name="outputFolderRoot">Path to the output folder</param>
+        /// <param name="dataProvider">The data provider to use</param>
+        /// <param name="dataCacheProvider">The data cache provider to use</param>
+        /// <param name="underlyingHistoryProvider">The history provider to use for the underlying security</param>
+        /// <param name="derivativeHistoryProvider">The history provider to use for the derivative contracts</param>
+        public DerivativeUniverseGenerator(DateTime processingDate, SecurityType securityType, string market, string dataFolderRoot,
+            string outputFolderRoot, IDataProvider dataProvider, IDataCacheProvider dataCacheProvider,
+            IHistoryProvider underlyingHistoryProvider, IHistoryProvider derivativeHistoryProvider)
         {
             _processingDate = processingDate;
             _securityType = securityType;
@@ -83,8 +109,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             _outputFolderRoot = outputFolderRoot;
             _dataProvider = dataProvider;
             _dataCacheProvider = dataCacheProvider;
-            _historyProvider = historyProvider;
+            _underlyingHistoryProvider = underlyingHistoryProvider;
+            _derivativeHistoryProvider = derivativeHistoryProvider;
             _marketHoursDatabase = MarketHoursDatabase.FromDataFolder();
+            _generateBackupFiles = Config.GetBool("universe-generation-backup-files");
         }
 
         /// <summary>
@@ -263,7 +291,13 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             var universeDirectory = LeanData.GenerateUniversesDirectory(_outputFolderRoot, canonicalSymbol);
             Directory.CreateDirectory(universeDirectory);
 
-            return Path.Combine(universeDirectory, $"{_processingDate:yyyyMMdd}.csv");
+            var universeFileName = Path.Combine(universeDirectory, $"{_processingDate:yyyyMMdd}.csv");
+            if (_generateBackupFiles)
+            {
+                universeFileName += ".backup";
+            }
+
+            return universeFileName;
         }
 
         /// <summary>
@@ -294,7 +328,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 LeanData.GetCommonTickTypeForCommonDataTypes(typeof(TradeBar), _securityType));
 
             entry = CreateUniverseEntry(underlyingSymbol);
-            history = GetHistory(new[] { underlyingHistoryRequest }, marketHoursEntry.ExchangeHours.TimeZone, marketHoursEntry);
+            history = GetHistory(new[] { underlyingHistoryRequest }, marketHoursEntry.ExchangeHours.TimeZone, marketHoursEntry,
+                _underlyingHistoryProvider);
             var success = true;
 
             if (history == null || history.Count == 0)
@@ -313,7 +348,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         }
 
         private List<Slice> GetHistory(HistoryRequest[] historyRequests,
-            DateTimeZone sliceTimeZone, MarketHoursDatabase.Entry marketHoursEntry)
+            DateTimeZone sliceTimeZone, MarketHoursDatabase.Entry marketHoursEntry, IHistoryProvider historyProvider)
         {
             List<Slice> history = null;
 
@@ -328,7 +363,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                     return request;
                 }).ToArray();
 
-                history = _historyProvider.GetHistory(resolutionHistoryRequests, sliceTimeZone).ToList();
+                history = historyProvider.GetHistory(resolutionHistoryRequests, sliceTimeZone).ToList();
                 if (history != null && history.Count > 0)
                 {
                     return history;
@@ -373,7 +408,8 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 }
                 else
                 {
-                    var history = GetHistory(historyRequests, marketHoursEntry.ExchangeHours.TimeZone, marketHoursEntry);
+                    var history = GetHistory(historyRequests, marketHoursEntry.ExchangeHours.TimeZone, marketHoursEntry,
+                        _derivativeHistoryProvider);
                     entry = GenerateDerivativeEntry(symbol, history, underlyingHistory);
                 }
 
