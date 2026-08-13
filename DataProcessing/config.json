@@ -1,5 +1,6 @@
 {
 	"data-folder": "../../../../Lean/Data/",
 	"history-provider": [ "SubscriptionDataReaderHistoryProvider", "IndexHistoryProvider" ],
-	"universe-generation-symbols": []
+	"universe-generation-symbols": [],
+	"universe-generation-backup-files": false
 }

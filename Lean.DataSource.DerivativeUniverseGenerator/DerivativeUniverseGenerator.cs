@@ -20,6 +20,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NodaTime;
+using QuantConnect.Configuration;
 using QuantConnect.Data;
 using QuantConnect.Data.Market;
 using QuantConnect.Interfaces;
@@ -40,6 +41,10 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         protected readonly string _market;
         protected readonly string _dataFolderRoot;
         protected readonly string _outputFolderRoot;
+
+        // whether to generate the universe files as backup files (suffixed with ".backup"),
+        // which Lean can use in live trading as a fallback when the expected universe files are not available yet
+        protected readonly bool _generateBackupFiles;
 
         protected readonly IDataProvider _dataProvider;
         protected readonly IHistoryProvider _historyProvider;
@@ -85,6 +90,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             _dataCacheProvider = dataCacheProvider;
             _historyProvider = historyProvider;
             _marketHoursDatabase = MarketHoursDatabase.FromDataFolder();
+            _generateBackupFiles = Config.GetBool("universe-generation-backup-files");
         }
 
         /// <summary>
@@ -263,7 +269,13 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             var universeDirectory = LeanData.GenerateUniversesDirectory(_outputFolderRoot, canonicalSymbol);
             Directory.CreateDirectory(universeDirectory);
 
-            return Path.Combine(universeDirectory, $"{_processingDate:yyyyMMdd}.csv");
+            var universeFileName = Path.Combine(universeDirectory, $"{_processingDate:yyyyMMdd}.csv");
+            if (_generateBackupFiles)
+            {
+                universeFileName += ".backup";
+            }
+
+            return universeFileName;
         }
 
         /// <summary>
