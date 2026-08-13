@@ -68,6 +68,59 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
             Assert.AreEqual(expectedFileName, Path.GetFileName(universeFileName));
         }
 
+        [Test]
+        public void UnderlyingAndDerivativeHistoryRequestsShareASingleProviderByDefault()
+        {
+            var historyProvider = new RecordingHistoryProvider();
+            var generator = new TestDerivativeUniverseGenerator(new DateTime(2026, 08, 10), SecurityType.Option, Market.USA,
+                _outputFolder, historyProvider);
+
+            var (underlying, contract) = GenerateHistoryForBothLegs(generator);
+
+            var underlyingRequests = historyProvider.Requests.Where(x => x.Symbol == underlying).ToList();
+            var derivativeRequests = historyProvider.Requests.Where(x => x.Symbol == contract).ToList();
+            Assert.AreEqual(1, underlyingRequests.Count);
+            Assert.AreEqual(3, derivativeRequests.Count);
+            Assert.AreEqual(historyProvider.Requests.Count, underlyingRequests.Count + derivativeRequests.Count);
+        }
+
+        [Test]
+        public void UnderlyingAndDerivativeHistoryRequestsAreRoutedToTheirOwnProviders()
+        {
+            var underlyingHistoryProvider = new RecordingHistoryProvider();
+            var derivativeHistoryProvider = new RecordingHistoryProvider();
+            var generator = new TestDerivativeUniverseGenerator(new DateTime(2026, 08, 10), SecurityType.Option, Market.USA,
+                _outputFolder, underlyingHistoryProvider, derivativeHistoryProvider);
+
+            var (underlying, contract) = GenerateHistoryForBothLegs(generator);
+
+            Assert.AreEqual(1, underlyingHistoryProvider.Requests.Count);
+            Assert.IsTrue(underlyingHistoryProvider.Requests.All(x => x.Symbol == underlying));
+
+            Assert.AreEqual(3, derivativeHistoryProvider.Requests.Count);
+            Assert.IsTrue(derivativeHistoryProvider.Requests.All(x => x.Symbol == contract));
+        }
+
+        /// <summary>
+        /// Runs the underlying entry generation and the derivative entries generation for a single SPY option contract,
+        /// so the requests each history provider received can be asserted on.
+        /// </summary>
+        private static (Symbol Underlying, Symbol Contract) GenerateHistoryForBothLegs(TestDerivativeUniverseGenerator generator)
+        {
+            var underlying = new Symbol(SecurityIdentifier.GenerateEquity("SPY", Market.USA, mapSymbol: false), "SPY");
+            var contract = Symbol.CreateOption(underlying, Market.USA, OptionStyle.American, OptionRight.Call, 400m, new DateTime(2026, 08, 21));
+
+            var marketHoursDatabase = MarketHoursDatabase.FromDataFolder();
+            var underlyingMarketHoursEntry = marketHoursDatabase.GetEntry(underlying.ID.Market, underlying, underlying.SecurityType);
+            var derivativeMarketHoursEntry = marketHoursDatabase.GetEntry(contract.ID.Market, contract, contract.SecurityType);
+
+            using var writer = new StreamWriter(Stream.Null);
+            generator.TryGenerateAndWriteUnderlyingLine(underlying, underlyingMarketHoursEntry, writer);
+            generator.GenerateDerivativeEntries(contract.Canonical, new List<Symbol> { contract }, derivativeMarketHoursEntry).ToList();
+
+            return (underlying, contract);
+        }
+
         private class TestDerivativeUniverseGenerator : DerivativeUniverseGeneratorBase
         {
             public TestDerivativeUniverseGenerator(DateTime processingDate, SecurityType securityType, string market, string outputFolderRoot,
@@ -76,9 +129,28 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
             {
             }
 
+            public TestDerivativeUniverseGenerator(DateTime processingDate, SecurityType securityType, string market, string outputFolderRoot,
+                IHistoryProvider underlyingHistoryProvider, IHistoryProvider derivativeHistoryProvider)
+                : base(processingDate, securityType, market, outputFolderRoot, outputFolderRoot, null, null,
+                      underlyingHistoryProvider, derivativeHistoryProvider)
+            {
+            }
+
             public new string GetUniverseFileName(Symbol canonicalSymbol)
             {
                 return base.GetUniverseFileName(canonicalSymbol);
+            }
+
+            public bool TryGenerateAndWriteUnderlyingLine(Symbol underlyingSymbol, MarketHoursDatabase.Entry marketHoursEntry,
+                StreamWriter writer)
+            {
+                return base.TryGenerateAndWriteUnderlyingLine(underlyingSymbol, marketHoursEntry, writer, out _, out _);
+            }
+
+            public IEnumerable<IDerivativeUniverseFileEntry> GenerateDerivativeEntries(Symbol canonicalSymbol, List<Symbol> symbols,
+                MarketHoursDatabase.Entry marketHoursEntry)
+            {
+                return base.GenerateDerivativeEntries(canonicalSymbol, symbols, marketHoursEntry, null, null);
             }
 
             protected override Dictionary<Symbol, List<Symbol>> FilterSymbols(Dictionary<Symbol, List<Symbol>> symbols,
@@ -95,6 +167,30 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
             protected override bool NeedsUnderlyingData()
             {
                 return false;
+            }
+        }
+
+        private class RecordingHistoryProvider : HistoryProviderBase
+        {
+            /// <summary>
+            /// The history requests this provider has received, across all <see cref="GetHistory"/> calls.
+            /// </summary>
+            public List<HistoryRequest> Requests { get; } = new();
+
+            public override int DataPointCount => 0;
+
+            public override void Initialize(HistoryProviderInitializeParameters parameters)
+            {
+            }
+
+            public override IEnumerable<Slice> GetHistory(IEnumerable<HistoryRequest> requests, DateTimeZone sliceTimeZone)
+            {
+                lock (Requests)
+                {
+                    Requests.AddRange(requests);
+                }
+
+                return Enumerable.Empty<Slice>();
             }
         }
     }

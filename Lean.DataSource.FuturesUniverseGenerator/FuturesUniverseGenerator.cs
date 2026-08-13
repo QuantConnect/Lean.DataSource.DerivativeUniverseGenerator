@@ -36,11 +36,30 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
         /// <param name="outputFolderRoot">Path to the output folder</param>
         /// <param name="dataProvider">The data provider to use</param>
         /// <param name="dataCacheProvider">The data cache provider to use</param>
-        /// <param name="historyProvider">The history provider to use</param>
+        /// <param name="historyProvider">The history provider to use for both the underlying and the derivatives</param>
         public FuturesUniverseGenerator(DateTime processingDate, string market, string dataFolderRoot, string outputFolderRoot,
             IDataProvider dataProvider, IDataCacheProvider dataCacheProvider, IHistoryProvider historyProvider)
+            : this(processingDate, market, dataFolderRoot, outputFolderRoot, dataProvider, dataCacheProvider,
+                historyProvider, historyProvider)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="FuturesUniverseGenerator" /> class.
+        /// </summary>
+        /// <param name="processingDate">The processing date</param>
+        /// <param name="market">Market of data to process</param>
+        /// <param name="dataFolderRoot">Path to the data folder</param>
+        /// <param name="outputFolderRoot">Path to the output folder</param>
+        /// <param name="dataProvider">The data provider to use</param>
+        /// <param name="dataCacheProvider">The data cache provider to use</param>
+        /// <param name="underlyingHistoryProvider">The history provider to use for the underlying security</param>
+        /// <param name="derivativeHistoryProvider">The history provider to use for the future contracts</param>
+        public FuturesUniverseGenerator(DateTime processingDate, string market, string dataFolderRoot, string outputFolderRoot,
+            IDataProvider dataProvider, IDataCacheProvider dataCacheProvider,
+            IHistoryProvider underlyingHistoryProvider, IHistoryProvider derivativeHistoryProvider)
             : base(processingDate, SecurityType.Future, market, dataFolderRoot, outputFolderRoot, dataProvider,
-                  dataCacheProvider, historyProvider)
+                  dataCacheProvider, underlyingHistoryProvider, derivativeHistoryProvider)
         {
         }
 
