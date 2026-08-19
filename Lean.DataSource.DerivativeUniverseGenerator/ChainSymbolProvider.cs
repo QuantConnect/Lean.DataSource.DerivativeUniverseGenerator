@@ -30,9 +30,11 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
     public class ChainSymbolProvider
     {
         private readonly IDataCacheProvider _dataCacheProvider;
+        private readonly IOptionChainProvider _optionChainProvider;
         protected readonly DateTime _processingDate;
         protected readonly string _dataSourceFolder;
         protected readonly SecurityType _securityType;
+        protected readonly string _market;
 
         // 99% of cases will use quote zip files to get the contracts, but in rear cases we may need to use trade zip files. e.g EUREX data
         protected TickType[] _symbolsDataTickTypes = { TickType.Quote, TickType.Trade };
@@ -53,14 +55,50 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         {
             _processingDate = processingDate;
             _securityType = securityType;
+            _market = market;
             _dataSourceFolder = Path.Combine(dataFolderRoot, securityType.SecurityTypeToLower(), market);
             _dataCacheProvider = dataCacheProvider;
+
+            if (securityType.IsOption() &&
+                Config.TryGetValue<string>("universe-option-chain-provider", out var optionChainProviderStr) &&
+                !string.IsNullOrEmpty(optionChainProviderStr))
+            {
+                _optionChainProvider = Composer.Instance.GetExportedValueByTypeName<IOptionChainProvider>(optionChainProviderStr);
+            }
         }
 
         /// <summary>
         /// Gets all the available symbols keyed by the canonical symbol from the available price data in the data folder.
         /// </summary>
         public virtual Dictionary<Symbol, List<Symbol>> GetSymbols()
+        {
+            if (_optionChainProvider == null)
+            {
+                return GetSymbolsFromDataFiles();
+            }
+
+            // A null symbol fetches the contracts of every canonical the provider finds
+            var contracts = _optionChainProvider.GetOptionContractList(null, _processingDate)?.ToList();
+            if (contracts == null || contracts.Count == 0)
+            {
+                // The custom chain provider failed, fallback to the file-based chains
+                return GetSymbolsFromDataFiles();
+            }
+
+            return contracts
+                .Where(symbol => symbol.SecurityType == _securityType
+                    && symbol.ID.Market == _market
+                    // do not return expired contracts
+                    && _processingDate.Date < symbol.ID.Date.Date)
+                .Distinct()
+                .GroupBy(symbol => symbol.Canonical)
+                .ToDictionary(group => group.Key, group => OrderSymbols(group, _securityType).ToList());
+        }
+
+        /// <summary>
+        /// Gets all the available symbols keyed by the canonical symbol from the available price data in the data folder.
+        /// </summary>
+        private Dictionary<Symbol, List<Symbol>> GetSymbolsFromDataFiles()
         {
             var result = new Dictionary<Symbol, List<Symbol>>();
 
@@ -172,19 +210,23 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 .Where(symbol => _processingDate.Date < symbol.ID.Date.Date)
                 .Distinct();
 
-            if (canonicalSymbol.SecurityType.IsOption())
+            return OrderSymbols(symbols, canonicalSymbol.SecurityType).ToList();
+        }
+
+        /// <summary>
+        /// Orders the given chain of contracts.
+        /// </summary>
+        private static IEnumerable<Symbol> OrderSymbols(IEnumerable<Symbol> symbols, SecurityType securityType)
+        {
+            if (securityType.IsOption())
             {
-                symbols = symbols.OrderBy(symbol => symbol.ID.OptionRight)
+                return symbols.OrderBy(symbol => symbol.ID.OptionRight)
                     .ThenBy(symbol => symbol.ID.Date)
                     .ThenBy(symbol => symbol.ID.StrikePrice)
                     .ThenBy(symbol => symbol.ID);
             }
-            else
-            {
-                symbols = symbols.OrderBy(symbol => symbol.ID.Date).ThenBy(symbol => symbol.ID);
-            }
 
-            return symbols.ToList();
+            return symbols.OrderBy(symbol => symbol.ID.Date).ThenBy(symbol => symbol.ID);
         }
     }
 }
