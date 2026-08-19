@@ -77,8 +77,9 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 return GetSymbolsFromDataFiles();
             }
 
-            // A null symbol fetches the contracts of every canonical the provider finds
-            var contracts = _optionChainProvider.GetOptionContractList(null, _processingDate)?.ToList();
+            // A tickerless dummy symbol fetches the contracts of every canonical of the
+            // generator's security type and market the provider finds
+            var contracts = _optionChainProvider.GetOptionContractList(CreateChainsRequestSymbol(), _processingDate)?.ToList();
             if (contracts == null || contracts.Count == 0)
             {
                 // The custom chain provider failed, fallback to the file-based chains
@@ -93,6 +94,30 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 .Distinct()
                 .GroupBy(symbol => symbol.Canonical)
                 .ToDictionary(group => group.Key, group => OrderSymbols(group, _securityType).ToList());
+        }
+
+        /// <summary>
+        /// Creates the tickerless dummy symbol used to request the chains of every canonical of the
+        /// generator's security type and market from the custom chain provider
+        /// </summary>
+        private Symbol CreateChainsRequestSymbol()
+        {
+            Symbol underlying;
+            switch (_securityType)
+            {
+                case SecurityType.Option:
+                    // equity SID generation must skip mapping, which rejects empty tickers
+                    underlying = new Symbol(SecurityIdentifier.GenerateEquity(string.Empty, _market, mapSymbol: false), string.Empty);
+                    break;
+                case SecurityType.IndexOption:
+                    underlying = Symbol.Create(string.Empty, SecurityType.Index, _market);
+                    break;
+                default:
+                    throw new NotSupportedException($"ChainSymbolProvider.CreateChainsRequestSymbol(): " +
+                        $"unsupported security type {_securityType}");
+            }
+
+            return Symbol.CreateCanonicalOption(underlying);
         }
 
         /// <summary>
