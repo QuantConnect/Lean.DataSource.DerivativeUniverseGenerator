@@ -79,6 +79,12 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             return new OptionUniverseEntry(symbol);
         }
 
+        protected override Dictionary<Symbol, List<Symbol>> GetSymbols()
+        {
+            var symbolChainProvider = new OptionChainSymbolProvider(_dataCacheProvider, _processingDate, _securityType, _market, _dataFolderRoot);
+            return symbolChainProvider.GetSymbols();
+        }
+
         protected override bool NeedsUnderlyingData()
         {
             // We don't need underlying data for future options, since they don't have greeks, so no need for underlying data for calculation
