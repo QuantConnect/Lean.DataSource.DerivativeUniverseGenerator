@@ -159,6 +159,11 @@ namespace QuantConnect.DataSource.DerivativeUniverseGeneratorTests
                 return symbols;
             }
 
+            protected override Dictionary<Symbol, List<Symbol>> GetSymbols()
+            {
+                return new Dictionary<Symbol, List<Symbol>>();
+            }
+
             protected override IDerivativeUniverseFileEntry CreateUniverseEntry(Symbol symbol)
             {
                 return new BaseDerivativeUniverseFileEntry(symbol);

@@ -27,7 +27,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
     /// <summary>
     /// File based symbol chain provider
     /// </summary>
-    public class ChainSymbolProvider
+    public abstract class ChainSymbolProvider
     {
         private readonly IDataCacheProvider _dataCacheProvider;
         protected readonly DateTime _processingDate;
@@ -172,19 +172,23 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
                 .Where(symbol => _processingDate.Date < symbol.ID.Date.Date)
                 .Distinct();
 
-            if (canonicalSymbol.SecurityType.IsOption())
+            return OrderSymbols(symbols, canonicalSymbol.SecurityType).ToList();
+        }
+
+        /// <summary>
+        /// Orders the given chain of contracts.
+        /// </summary>
+        protected static IEnumerable<Symbol> OrderSymbols(IEnumerable<Symbol> symbols, SecurityType securityType)
+        {
+            if (securityType.IsOption())
             {
-                symbols = symbols.OrderBy(symbol => symbol.ID.OptionRight)
+                return symbols.OrderBy(symbol => symbol.ID.OptionRight)
                     .ThenBy(symbol => symbol.ID.Date)
                     .ThenBy(symbol => symbol.ID.StrikePrice)
                     .ThenBy(symbol => symbol.ID);
             }
-            else
-            {
-                symbols = symbols.OrderBy(symbol => symbol.ID.Date).ThenBy(symbol => symbol.ID);
-            }
 
-            return symbols.ToList();
+            return symbols.OrderBy(symbol => symbol.ID.Date).ThenBy(symbol => symbol.ID);
         }
     }
 }

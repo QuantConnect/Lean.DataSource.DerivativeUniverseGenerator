@@ -165,11 +165,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
         /// <summary>
         /// Gets the available universe symbols grouped by their canonical symbol.
         /// </summary>
-        protected virtual Dictionary<Symbol, List<Symbol>> GetSymbols()
-        {
-            var symbolChainProvider = new ChainSymbolProvider(_dataCacheProvider, _processingDate, _securityType, _market, _dataFolderRoot);
-            return symbolChainProvider.GetSymbols();
-        }
+        protected abstract Dictionary<Symbol, List<Symbol>> GetSymbols();
 
         /// <summary>
         /// Filters the symbols to process based on the given list of symbols.
