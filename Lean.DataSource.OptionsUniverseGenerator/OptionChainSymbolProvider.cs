@@ -68,10 +68,6 @@ namespace QuantConnect.DataSource.OptionsUniverseGenerator
             }
 
             return contracts
-                .Where(symbol => symbol.SecurityType == _securityType
-                    && symbol.ID.Market == _market
-                    // do not return expired contracts
-                    && _processingDate.Date < symbol.ID.Date.Date)
                 .Distinct()
                 .GroupBy(symbol => symbol.Canonical)
                 .ToDictionary(group => group.Key, group => OrderSymbols(group, _securityType).ToList());
