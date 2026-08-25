@@ -183,7 +183,7 @@ namespace QuantConnect.DataSource.DerivativeUniverseGenerator
             var totalContracts = symbols.Sum(x => x.Value.Count);
             var underlyingsWithMissingData = 0;
             var start = DateTime.UtcNow;
-            Parallel.ForEach(symbols, new ParallelOptions { MaxDegreeOfParallelism = (int)(Environment.ProcessorCount * 1.5m), CancellationToken = cancellationTokenSource.Token }, kvp =>
+            Parallel.ForEach(symbols, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount * 2, CancellationToken = cancellationTokenSource.Token }, kvp =>
             {
                 var canonicalSymbol = kvp.Key;
                 var contractsSymbols = kvp.Value;
