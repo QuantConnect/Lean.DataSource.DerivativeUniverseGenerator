@@ -33,6 +33,7 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
     {
         private readonly IFutureChainProvider _futuresChainProvider;
         private readonly string _market;
+        private readonly bool _chainProviderRequiresDummySymbol;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="FutureChainSymbolProvider"/> class
@@ -47,6 +48,8 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
                 !string.IsNullOrEmpty(futuresChainProviderStr))
             {
                 _futuresChainProvider = Composer.Instance.GetExportedValueByTypeName<IFutureChainProvider>(futuresChainProviderStr);
+                // Some chain providers only accept a tickerless dummy future symbol and return the chains of every canonical in the market
+                _chainProviderRequiresDummySymbol = Config.GetBool("futures-chain-provider-requires-dummy-symbol", false);
             }
         }
 
@@ -60,8 +63,15 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
                 return base.GetSymbols();
             }
 
-            var chains = FuturesExpiryFunctions.FuturesExpiryDictionary.Keys
-                .Where(symbol => symbol.ID.Market == _market)
+            var canonicals = FuturesExpiryFunctions.FuturesExpiryDictionary.Keys
+                .Where(symbol => symbol.ID.Market == _market);
+
+            if (_chainProviderRequiresDummySymbol)
+            {
+                return GetSymbolsWithDummySymbol(canonicals);
+            }
+
+            var chains = canonicals
                 .Select(symbol =>
                 {
                     var futureChain = _futuresChainProvider.GetFutureContractList(symbol, _processingDate)?.ToList();
@@ -92,6 +102,30 @@ namespace QuantConnect.DataSource.FuturesUniverseGenerator
             }
 
             return new Dictionary<Symbol, List<Symbol>>(chains);
+        }
+
+        /// <summary>
+        /// Fetches the chains of every canonical future in the market from the custom chain provider using a single
+        /// tickerless dummy future symbol request, which returns the contracts of all the canonicals it finds,
+        /// keeping only the canonicals known to <see cref="FuturesExpiryFunctions.FuturesExpiryDictionary"/>
+        /// </summary>
+        private Dictionary<Symbol, List<Symbol>> GetSymbolsWithDummySymbol(IEnumerable<Symbol> canonicals)
+        {
+            var dummySymbol = Symbol.CreateFuture(string.Empty, _market, SecurityIdentifier.DefaultDate);
+            var contracts = _futuresChainProvider.GetFutureContractList(dummySymbol, _processingDate)?.ToList();
+            if (contracts == null || contracts.Count == 0)
+            {
+                // The custom chain provider failed, fallback to the file-based chains
+                return base.GetSymbols();
+            }
+
+            var canonicalsSet = canonicals.ToHashSet();
+
+            return contracts
+                .Where(symbol => canonicalsSet.Contains(symbol.Canonical))
+                .Distinct()
+                .GroupBy(symbol => symbol.Canonical)
+                .ToDictionary(group => group.Key, group => group.ToList());
         }
 
         protected override IEnumerable<string> GetZipFileNames(DateTime date, Resolution resolution)
